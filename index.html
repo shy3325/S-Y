@@ -51,8 +51,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;hei
 .wm-list{display:flex;flex-direction:column;gap:3px}
 .wm-item{display:flex;align-items:center;gap:5px;padding:4px 5px;background:var(--bg);border-radius:var(--radius);font-size:10px;border:1px solid transparent;transition:border-color .15s;flex-wrap:wrap}
 .wm-item:hover{border-color:var(--border)}
-.wm-item.locked{opacity:.7;pointer-events:none}
-.wm-item.locked .wm-lock-btn{pointer-events:auto;opacity:1}
+.wm-item.locked .wm-controls{pointer-events:none;opacity:.5}
+.wm-item.locked .wm-lock-btn{pointer-events:auto!important;opacity:1!important}
 .wm-item img{width:24px;height:24px;object-fit:contain;border-radius:3px;background:#222}
 .wm-item .wm-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:1px 3px;border-radius:3px;border:1px solid transparent;min-width:36px;color:var(--text);font-size:10px}
 .wm-item .wm-name:hover{border-color:var(--border)}
@@ -193,7 +193,6 @@ function dbClear(s){return new Promise(r=>{const tx=db.transaction(s,'readwrite'
 
 let images=[],currentIdx=0,watermarks=[],syncMode=false,eraserMode=false,eraserRadius=30;
 let renderQueued=false,renderRAF=0,imageCache=new Map(),selectedIconWmId=null;
-// watermark order arrays
 let wmOrderTile=[],wmOrderIcon=[];
 
 const canvas=document.getElementById('mainCanvas'),ctx=canvas.getContext('2d'),canvasWrap=document.getElementById('canvasWrap');
@@ -216,12 +215,10 @@ async function loadState(){
   const ir=await new Promise(r=>{const tx=db.transaction('state','readonly');const req=tx.objectStore('state').get('currentIdx');req.onsuccess=()=>r(req.result);req.onerror=()=>r(null)});
   currentIdx=ir?ir.value:0;if(currentIdx>=images.length)currentIdx=Math.max(0,images.length-1);
   images.forEach(img=>{if(!img.wmState)img.wmState={};if(!img.erasers)img.erasers=[]});
-  // load orders
   const otR=await new Promise(r=>{const tx=db.transaction('state','readonly');const req=tx.objectStore('state').get('wmOrderTile');req.onsuccess=()=>r(req.result);req.onerror=()=>r(null)});
   wmOrderTile=otR?otR.value:[];
   const oiR=await new Promise(r=>{const tx=db.transaction('state','readonly');const req=tx.objectStore('state').get('wmOrderIcon');req.onsuccess=()=>r(req.result);req.onerror=()=>r(null)});
   wmOrderIcon=oiR?oiR.value:[];
-  // sync orders with actual watermarks
   syncWmOrders();
 }
 function syncWmOrders(){
@@ -240,7 +237,6 @@ document.getElementById('fileImg').addEventListener('change',async function(){
   const files=[...this.files];if(!files.length)return;
   for(const f of files){
     const du=await fileToDataURL(f);
-    // Build wmState for new image: copy blendMode/opacity/position/scale/rotation from current, but enabled=false
     const newWmState={};
     const curImg=images[currentIdx];
     watermarks.forEach(wm=>{
@@ -286,8 +282,7 @@ function startRename(span,wm){
   span.replaceWith(inp);inp.focus();inp.select();
 }
 
-// Drag reorder state
-let dragWmId=null,dragType=null,dragOverId=null;
+let dragWmId=null,dragType=null;
 
 function renderWmLists(){
   const tL=document.getElementById('tileWmList'),iL=document.getElementById('iconWmList');tL.innerHTML='';iL.innerHTML='';
@@ -298,7 +293,6 @@ function renderWmLists(){
     const d=document.createElement('div');d.className='wm-item';d.dataset.wmId=wm.id;
     if(wm.locked)d.classList.add('locked');
 
-    // Drag handle
     const handle=document.createElement('span');handle.className='wm-drag-handle';handle.textContent='⠿';handle.draggable=true;
     handle.addEventListener('dragstart',e=>{dragWmId=wm.id;dragType=wm.type;e.dataTransfer.effectAllowed='move'});
     handle.addEventListener('touchstart',e=>{dragWmId=wm.id;dragType=wm.type},{passive:true});
@@ -311,29 +305,32 @@ function renderWmLists(){
     const th=document.createElement('img');th.src=wm.dataURL;d.appendChild(th);
     const nm=document.createElement('span');nm.className='wm-name';nm.textContent=wm.name;nm.onclick=()=>{if(!wm.locked)startRename(nm,wm)};d.appendChild(nm);
 
+    // Controls wrapper for lock toggling
+    const controls=document.createElement('span');controls.className='wm-controls';controls.style.cssText='display:contents';
+
     if(wm.type==='icon'){
       const sL=document.createElement('span');sL.className='wm-size-label';sL.textContent=Math.round(ws.scale*100)+'%';
       const sR=document.createElement('input');sR.type='range';sR.min='10';sR.max='300';sR.value=Math.round(ws.scale*100);
       sR.oninput=()=>{const v=parseInt(sR.value)/100;applyToTargets(img=>{getWmState(img,wm.id).scale=v});sL.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
-      d.appendChild(sR);d.appendChild(sL);
+      controls.appendChild(sR);controls.appendChild(sL);
       const rL=document.createElement('span');rL.className='wm-size-label';rL.textContent=Math.round(ws.rotation)+'°';
       const rR=document.createElement('input');rR.type='range';rR.min='-180';rR.max='180';rR.value=Math.round(ws.rotation);
       rR.oninput=()=>{const v=parseInt(rR.value);applyToTargets(img=>{getWmState(img,wm.id).rotation=v});rL.textContent=v+'°';queueRender();debouncedSave()};
-      d.appendChild(rR);d.appendChild(rL);
+      controls.appendChild(rR);controls.appendChild(rL);
     }
 
     const sel=document.createElement('select');BLEND_MODES.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=BLEND_LABELS[m]||m;if(ws.blendMode===m)o.selected=true;sel.appendChild(o)});
-    sel.onchange=()=>{applyToTargets(img=>{getWmState(img,wm.id).blendMode=sel.value});debouncedSave();queueRender()};d.appendChild(sel);
+    sel.onchange=()=>{applyToTargets(img=>{getWmState(img,wm.id).blendMode=sel.value});debouncedSave();queueRender()};controls.appendChild(sel);
 
-    // Enable switch
     const sw=document.createElement('div');sw.className='switch'+(ws.enabled?' on':'');sw.style.cssText='width:28px;height:14px;flex-shrink:0';
-    sw.onclick=()=>{const nv=!getWmState(cur,wm.id).enabled;applyToTargets(img=>{getWmState(img,wm.id).enabled=nv});debouncedSave();refreshAll()};d.appendChild(sw);
+    sw.onclick=()=>{const nv=!getWmState(cur,wm.id).enabled;applyToTargets(img=>{getWmState(img,wm.id).enabled=nv});debouncedSave();refreshAll()};controls.appendChild(sw);
 
-    // Lock button
+    d.appendChild(controls);
+
+    // Lock button - always interactive
     const lockBtn=document.createElement('button');lockBtn.className='wm-lock-btn';lockBtn.textContent=wm.locked?'🔒':'🔓';lockBtn.style.cssText='padding:1px 5px;font-size:11px;background:transparent;border-color:transparent;color:var(--text-dim)';
     lockBtn.onclick=()=>{wm.locked=!wm.locked;debouncedSave();refreshAll()};d.appendChild(lockBtn);
 
-    // Delete
     const del=document.createElement('button');del.textContent='✕';del.style.cssText='padding:1px 5px;font-size:9px;background:transparent;border-color:var(--highlight-dim);color:var(--highlight)';
     del.onclick=async()=>{await dbDelete('watermarks',wm.id);watermarks=watermarks.filter(w=>w.id!==wm.id);const oIdx=orderArr.indexOf(wm.id);if(oIdx>=0)orderArr.splice(oIdx,1);images.forEach(img=>{delete img.wmState[wm.id]});if(selectedIconWmId===wm.id)selectedIconWmId=null;debouncedSave();refreshAll()};d.appendChild(del);
 
@@ -349,9 +346,7 @@ function renderWmLists(){
     container.appendChild(d);
   }
 
-  // Render tiles in order
   wmOrderTile.forEach(id=>{const wm=watermarks.find(w=>w.id===id);if(wm)buildItem(wm,wmOrderTile,tL)});
-  // Render icons in order
   wmOrderIcon.forEach(id=>{const wm=watermarks.find(w=>w.id===id);if(wm)buildItem(wm,wmOrderIcon,iL)});
 }
 
@@ -368,7 +363,6 @@ const _offPool=[];
 function getOff(w,h){let c=_offPool.pop();if(!c)c=document.createElement('canvas');c.width=w;c.height=h;return c}
 function relOff(c){c.getContext('2d').clearRect(0,0,c.width,c.height);if(_offPool.length<4)_offPool.push(c)}
 
-// Ordered watermarks for rendering: tiles first (by wmOrderTile), then icons (by wmOrderIcon)
 function getOrderedWatermarks(){
   const result=[];
   wmOrderTile.forEach(id=>{const wm=watermarks.find(w=>w.id===id);if(wm)result.push(wm)});
@@ -403,9 +397,35 @@ async function renderCanvas(){
 
 let dragState=null,pinchDist0=null,pinchScale0=null,pinchAng0=null,pinchRot0=null;
 function getCC(e){const r=canvas.getBoundingClientRect(),t=e.touches?e.touches[0]:(e.changedTouches?e.changedTouches[0]:e);return{x:(t.clientX-r.left)/r.width,y:(t.clientY-r.top)/r.height,cx:t.clientX,cy:t.clientY}}
-function inRotRect(px,py,cx,cy,hw,hh,rd){const a=-rd*Math.PI/180,dx=px-cx,dy=py-cy;return Math.abs(dx*Math.cos(a)-dy*Math.sin(a))<=hw&&Math.abs(dx*Math.sin(a)+dy*Math.cos(a))<=hh}
-function iconBounds(wm,cur){const ws=getWmState(cur,wm.id),wi=imageCache.get(wm.dataURL);if(!wi)return null;const bw=Math.min(wi.naturalWidth,canvas.width*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;return{cx:ws.x,cy:ws.y,hw:iw/(2*canvas.width),hh:ih/(2*canvas.height),r:ws.rotation}}
-function findIcon(nx,ny){if(!images[currentIdx])return null;const cur=images[currentIdx];for(const wm of[watermarks].filter(w=>w.type==='icon'&&getWmState(cur,w.id).enabled&&!w.locked).reverse()){const b=iconBounds(wm,cur);if(b&&inRotRect(nx,ny,b.cx,b.cy,b.hw*1.3,b.hh*1.3,b.r))return wm}return null}
+
+function inRotRect(px,py,cx,cy,hw,hh,rd){
+  const a=-rd*Math.PI/180,dx=px-cx,dy=py-cy;
+  return Math.abs(dx*Math.cos(a)-dy*Math.sin(a))<=hw&&Math.abs(dx*Math.sin(a)+dy*Math.cos(a))<=hh;
+}
+
+function iconBounds(wm,cur){
+  const ws=getWmState(cur,wm.id),wi=imageCache.get(wm.dataURL);
+  if(!wi)return null;
+  const bw=Math.min(wi.naturalWidth,canvas.width*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;
+  return{cx:ws.x,cy:ws.y,hw:iw/(2*canvas.width),hh:ih/(2*canvas.height),r:ws.rotation};
+}
+
+function findIcon(nx,ny){
+  if(!images[currentIdx])return null;
+  const cur=images[currentIdx];
+  // Search in reverse icon order (topmost first)
+  const iconWms=[];
+  wmOrderIcon.forEach(id=>{const wm=watermarks.find(w=>w.id===id);if(wm)iconWms.push(wm)});
+  for(let i=iconWms.length-1;i>=0;i--){
+    const wm=iconWms[i];
+    if(getWmState(cur,wm.id).enabled&&!wm.locked){
+      const b=iconBounds(wm,cur);
+      if(b&&inRotRect(nx,ny,b.cx,b.cy,b.hw*1.3,b.hh*1.3,b.r))return wm;
+    }
+  }
+  return null;
+}
+
 function tDist(a,b){return Math.sqrt((a.clientX-b.clientX)**2+(a.clientY-b.clientY)**2)}
 function tAng(a,b){return Math.atan2(b.clientY-a.clientY,b.clientX-a.clientX)*180/Math.PI}
 
@@ -422,8 +442,20 @@ function findEraserAt(cur,nx,ny){
 
 function onDown(e){
   if(!images.length)return;const cur=images[currentIdx];
-  if(e.touches&&e.touches.length===2&&selectedIconWmId!==null){e.preventDefault();const selWm=watermarks.find(w=>w.id===selectedIconWmId);if(selWm&&selWm.locked)return;const ws=getWmState(cur,selectedIconWmId);pinchDist0=tDist(e.touches[0],e.touches[1]);pinchScale0=ws.scale;pinchAng0=tAng(e.touches[0],e.touches[1]);pinchRot0=ws.rotation;dragState={t:'pinch'};return}
+  // Pinch gesture for selected icon
+  if(e.touches&&e.touches.length===2&&selectedIconWmId!==null){
+    e.preventDefault();
+    const selWm=watermarks.find(w=>w.id===selectedIconWmId);
+    if(selWm&&selWm.locked)return;
+    const ws=getWmState(cur,selectedIconWmId);
+    pinchDist0=tDist(e.touches[0],e.touches[1]);pinchScale0=ws.scale;
+    pinchAng0=tAng(e.touches[0],e.touches[1]);pinchRot0=ws.rotation;
+    dragState={t:'pinch'};return;
+  }
+  const isSingleTouch=e.touches?e.touches.length===1:true;
+  if(!isSingleTouch)return;
   e.preventDefault();const c=getCC(e);
+
   if(eraserMode){
     const hitIdx=findEraserAt(cur,c.x,c.y);
     if(hitIdx>=0){
@@ -434,21 +466,73 @@ function onDown(e){
     }
     debouncedSave();queueRender();return;
   }
-  const hit=findIcon(c.x,c.y);if(hit){selectedIconWmId=hit.id;const ws=getWmState(cur,hit.id);dragState={t:'move',wid:hit.id,ox:c.x-ws.x,oy:c.y-ws.y};queueRender()}else{selectedIconWmId=null;queueRender()}
+  // Try to find an icon watermark under the pointer
+  const hit=findIcon(c.x,c.y);
+  if(hit){
+    selectedIconWmId=hit.id;
+    const ws=getWmState(cur,hit.id);
+    dragState={t:'move',wid:hit.id,ox:c.x-ws.x,oy:c.y-ws.y};
+    queueRender();
+  }else{
+    selectedIconWmId=null;
+    queueRender();
+  }
 }
-function onMove(e){
-  if(!dragState){if(eraserMode){const ind=document.getElementById('eraserIndicator'),wr=canvasWrap.getBoundingClientRect(),cr=canvas.getBoundingClientRect(),t=e.touches?e.touches[0]:e,d=eraserRadius*2*(cr.width/canvas.width);ind.style.display='block';ind.style.width=d+'px';ind.style.height=d+'px';ind.style.left=(t.clientX-wr.left-d/2)+'px';ind.style.top=(t.clientY-wr.top-d/2)+'px'}return}
-  e.preventDefault();const cur=images[currentIdx];
-  if(dragState.t==='pinch'&&e.touches&&e.touches.length===2){const dist=tDist(e.touches[0],e.touches[1]),ang=tAng(e.touches[0],e.touches[1]),ns=Math.max(.1,Math.min(3,pinchScale0*(dist/pinchDist0))),nr=pinchRot0+(ang-pinchAng0);applyToTargets(img=>{const ws=getWmState(img,selectedIconWmId);ws.scale=ns;ws.rotation=nr});queueRender();debouncedSave();return}
-  if(dragState.t==='move'){const c=getCC(e);applyToTargets(img=>{const ws=getWmState(img,dragState.wid);ws.x=Math.max(0,Math.min(1,c.x-dragState.ox));ws.y=Math.max(0,Math.min(1,c.y-dragState.oy))});queueRender();debouncedSave()}
-}
-function onUp(){if(dragState){dragState=null;pinchDist0=pinchScale0=pinchAng0=pinchRot0=null;debouncedSave()}}
 
-canvas.addEventListener('mousedown',onDown);canvas.addEventListener('mousemove',onMove);canvas.addEventListener('mouseup',onUp);
+function onMove(e){
+  if(!dragState){
+    if(eraserMode){
+      const ind=document.getElementById('eraserIndicator'),wr=canvasWrap.getBoundingClientRect(),cr=canvas.getBoundingClientRect(),t=e.touches?e.touches[0]:e,d=eraserRadius*2*(cr.width/canvas.width);
+      ind.style.display='block';ind.style.width=d+'px';ind.style.height=d+'px';ind.style.left=(t.clientX-wr.left-d/2)+'px';ind.style.top=(t.clientY-wr.top-d/2)+'px';
+    }
+    return;
+  }
+  e.preventDefault();const cur=images[currentIdx];
+  if(dragState.t==='pinch'&&e.touches&&e.touches.length===2){
+    const dist=tDist(e.touches[0],e.touches[1]),ang=tAng(e.touches[0],e.touches[1]);
+    const ns=Math.max(.1,Math.min(3,pinchScale0*(dist/pinchDist0))),nr=pinchRot0+(ang-pinchAng0);
+    applyToTargets(img=>{const ws=getWmState(img,selectedIconWmId);ws.scale=ns;ws.rotation=nr});
+    queueRender();debouncedSave();renderWmLists();return;
+  }
+  if(dragState.t==='move'){
+    const c=getCC(e);
+    applyToTargets(img=>{const ws=getWmState(img,dragState.wid);ws.x=Math.max(0,Math.min(1,c.x-dragState.ox));ws.y=Math.max(0,Math.min(1,c.y-dragState.oy))});
+    queueRender();debouncedSave();
+  }
+}
+
+function onUp(){
+  if(dragState){dragState=null;pinchDist0=pinchScale0=pinchAng0=pinchRot0=null;debouncedSave()}
+}
+
+canvas.addEventListener('mousedown',onDown);
+canvas.addEventListener('mousemove',onMove);
+canvas.addEventListener('mouseup',onUp);
 canvas.addEventListener('mouseleave',()=>{onUp();document.getElementById('eraserIndicator').style.display='none'});
-canvas.addEventListener('touchstart',onDown,{passive:false});canvas.addEventListener('touchmove',onMove,{passive:false});canvas.addEventListener('touchend',onUp);
-canvas.addEventListener('wheel',e=>{if(selectedIconWmId===null)return;const selWm=watermarks.find(w=>w.id===selectedIconWmId);if(selWm&&selWm.locked)return;e.preventDefault();if(e.shiftKey){const d=e.deltaY>0?-5:5;applyToTargets(img=>{getWmState(img,selectedIconWmId).rotation=(getWmState(img,selectedIconWmId).rotation+d)%360})}else{const d=e.deltaY>0?-.05:.05;applyToTargets(img=>{const ws=getWmState(img,selectedIconWmId);ws.scale=Math.max(.1,Math.min(3,ws.scale+d))})}queueRender();debouncedSave();renderWmLists()},{passive:false});
-canvasWrap.addEventListener('mousemove',e=>{if(!eraserMode||dragState)return;const ind=document.getElementById('eraserIndicator'),wr=canvasWrap.getBoundingClientRect(),cr=canvas.getBoundingClientRect(),d=eraserRadius*2*(cr.width/canvas.width);ind.style.display='block';ind.style.width=d+'px';ind.style.height=d+'px';ind.style.left=(e.clientX-wr.left-d/2)+'px';ind.style.top=(e.clientY-wr.top-d/2)+'px'});
+canvas.addEventListener('touchstart',onDown,{passive:false});
+canvas.addEventListener('touchmove',onMove,{passive:false});
+canvas.addEventListener('touchend',onUp);
+
+canvas.addEventListener('wheel',e=>{
+  if(selectedIconWmId===null)return;
+  const selWm=watermarks.find(w=>w.id===selectedIconWmId);
+  if(selWm&&selWm.locked)return;
+  e.preventDefault();
+  if(e.shiftKey){
+    const d=e.deltaY>0?-5:5;
+    applyToTargets(img=>{getWmState(img,selectedIconWmId).rotation=(getWmState(img,selectedIconWmId).rotation+d)%360});
+  }else{
+    const d=e.deltaY>0?-.05:.05;
+    applyToTargets(img=>{const ws=getWmState(img,selectedIconWmId);ws.scale=Math.max(.1,Math.min(3,ws.scale+d))});
+  }
+  queueRender();debouncedSave();renderWmLists();
+},{passive:false});
+
+canvasWrap.addEventListener('mousemove',e=>{
+  if(!eraserMode||dragState)return;
+  const ind=document.getElementById('eraserIndicator'),wr=canvasWrap.getBoundingClientRect(),cr=canvas.getBoundingClientRect(),d=eraserRadius*2*(cr.width/canvas.width);
+  ind.style.display='block';ind.style.width=d+'px';ind.style.height=d+'px';ind.style.left=(e.clientX-wr.left-d/2)+'px';ind.style.top=(e.clientY-wr.top-d/2)+'px';
+});
 canvasWrap.addEventListener('mouseleave',()=>{document.getElementById('eraserIndicator').style.display='none'});
 
 async function renderFinal(imgObj){
