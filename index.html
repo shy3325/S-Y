@@ -22,8 +22,9 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;hei
 .toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;z-index:60}
 .toolbar-title{font-weight:600;font-size:13px;color:var(--highlight);margin-right:auto;letter-spacing:1px}
 .toolbar-group{display:flex;align-items:center;gap:6px}
-.eraser-tools{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-dim)}
+.eraser-tools{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-dim);flex-wrap:wrap}
 .eraser-tools input[type="range"]{width:54px}
+.eraser-tools select{font-size:10px;padding:2px 4px}
 
 .main-area{flex:1 1 0;min-height:0;position:relative;overflow:hidden}
 .canvas-wrap{width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#08080c;touch-action:none}
@@ -116,9 +117,21 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;hei
   <div class="toolbar-group">
     <div class="switch-wrap"><label>橡皮擦</label><div class="switch" id="eraserSwitch" onclick="toggleEraser()"></div></div>
     <div class="eraser-tools" id="eraserTools" style="display:none">
+      <select id="eraserType" onchange="updateEraserUI()">
+        <option value="hard">硬橡皮</option>
+        <option value="soft">软橡皮</option>
+      </select>
       <label>径</label>
       <input type="range" id="eraserSize" min="10" max="800" value="60" oninput="updateEraserSize()">
       <span id="eraserSizeVal">60</span>
+      <label>强度</label>
+      <input type="range" id="eraserOpacity" min="0" max="100" value="100" oninput="document.getElementById('eraserOpacityVal').textContent=this.value+'%'">
+      <span id="eraserOpacityVal">100%</span>
+      <span id="softHardnessWrap" style="display:none">
+        <label>硬度</label>
+        <input type="range" id="eraserHardness" min="0" max="100" value="50" oninput="document.getElementById('eraserHardnessVal').textContent=this.value+'%'">
+        <span id="eraserHardnessVal">50%</span>
+      </span>
     </div>
   </div>
 </div>
@@ -184,7 +197,12 @@ function switchTab(el){
   if(!was){el.classList.add('active');document.getElementById(tid).classList.add('active')}
 }
 
-const DB_NAME='watermarkToolDB',DB_VER=6;let db=null;
+function updateEraserUI(){
+  const isSoft=document.getElementById('eraserType').value==='soft';
+  document.getElementById('softHardnessWrap').style.display=isSoft?'inline-flex':'none';
+}
+
+const DB_NAME='watermarkToolDB',DB_VER=7;let db=null;
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const d=e.target.result;['images','watermarks','state'].forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,s==='state'?{keyPath:'key'}:{keyPath:'id',autoIncrement:true})})};r.onsuccess=e=>{db=e.target.result;res(db)};r.onerror=rej})}
 function dbPut(s,v){return new Promise((r,j)=>{const tx=db.transaction(s,'readwrite');tx.objectStore(s).put(v).onsuccess=e=>r(e.target.result);tx.onerror=j})}
 function dbGetAll(s){return new Promise(r=>{db.transaction(s,'readonly').objectStore(s).getAll().onsuccess=e=>r(e.target.result)})}
@@ -305,7 +323,6 @@ function renderWmLists(){
     const th=document.createElement('img');th.src=wm.dataURL;d.appendChild(th);
     const nm=document.createElement('span');nm.className='wm-name';nm.textContent=wm.name;nm.onclick=()=>{if(!wm.locked)startRename(nm,wm)};d.appendChild(nm);
 
-    // Controls wrapper for lock toggling
     const controls=document.createElement('span');controls.className='wm-controls';controls.style.cssText='display:contents';
 
     if(wm.type==='icon'){
@@ -327,14 +344,12 @@ function renderWmLists(){
 
     d.appendChild(controls);
 
-    // Lock button - always interactive
     const lockBtn=document.createElement('button');lockBtn.className='wm-lock-btn';lockBtn.textContent=wm.locked?'🔒':'🔓';lockBtn.style.cssText='padding:1px 5px;font-size:11px;background:transparent;border-color:transparent;color:var(--text-dim)';
     lockBtn.onclick=()=>{wm.locked=!wm.locked;debouncedSave();refreshAll()};d.appendChild(lockBtn);
 
     const del=document.createElement('button');del.textContent='✕';del.style.cssText='padding:1px 5px;font-size:9px;background:transparent;border-color:var(--highlight-dim);color:var(--highlight)';
     del.onclick=async()=>{await dbDelete('watermarks',wm.id);watermarks=watermarks.filter(w=>w.id!==wm.id);const oIdx=orderArr.indexOf(wm.id);if(oIdx>=0)orderArr.splice(oIdx,1);images.forEach(img=>{delete img.wmState[wm.id]});if(selectedIconWmId===wm.id)selectedIconWmId=null;debouncedSave();refreshAll()};d.appendChild(del);
 
-    // Sub row: opacity
     const subRow=document.createElement('div');subRow.className='wm-row-sub';
     const opLabel=document.createElement('label');opLabel.textContent='透明度';subRow.appendChild(opLabel);
     const opRange=document.createElement('input');opRange.type='range';opRange.min='0';opRange.max='100';opRange.value=Math.round(ws.opacity*100);
@@ -370,6 +385,58 @@ function getOrderedWatermarks(){
   return result;
 }
 
+/* ===== Eraser mask generation ===== */
+function buildEraserMask(erasers, W, H) {
+  // Returns a canvas of size W x H where alpha=0 means fully erased, alpha=255 means fully visible
+  // We build it as an "erase amount" map first, then invert
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = W; maskCanvas.height = H;
+  const mctx = maskCanvas.getContext('2d');
+
+  // Start fully opaque (white = keep everything)
+  mctx.fillStyle = '#fff';
+  mctx.fillRect(0, 0, W, H);
+
+  // For each eraser, punch a hole
+  for (const er of erasers) {
+    const cx = er.x * W, cy = er.y * H, rPx = er.r * W;
+    const strength = er.opacity !== undefined ? er.opacity : 1;
+
+    if (er.type === 'hard' || !er.type) {
+      // Hard eraser: solid circle, use destination-out
+      mctx.globalCompositeOperation = 'destination-out';
+      mctx.globalAlpha = strength;
+      mctx.beginPath();
+      mctx.arc(cx, cy, rPx, 0, Math.PI * 2);
+      mctx.fill();
+      mctx.globalCompositeOperation = 'source-over';
+      mctx.globalAlpha = 1;
+    } else {
+      // Soft eraser with hardness
+      const hardness = er.hardness !== undefined ? er.hardness : 0.5;
+      // hardness 0 = fully soft gradient from center to edge
+      // hardness 1 = almost hard, only tiny soft edge
+      // We create a radial gradient: center is fully erased, edge is not erased
+      // The "hard core" occupies hardness fraction of radius
+      mctx.globalCompositeOperation = 'destination-out';
+      mctx.globalAlpha = 1;
+      const grad = mctx.createRadialGradient(cx, cy, 0, cx, cy, rPx);
+      grad.addColorStop(0, `rgba(255,255,255,${strength})`);
+      if (hardness > 0.01) {
+        grad.addColorStop(Math.min(hardness, 0.99), `rgba(255,255,255,${strength})`);
+      }
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      mctx.fillStyle = grad;
+      mctx.beginPath();
+      mctx.arc(cx, cy, rPx, 0, Math.PI * 2);
+      mctx.fill();
+      mctx.globalCompositeOperation = 'source-over';
+      mctx.fillStyle = '#fff';
+    }
+  }
+  return maskCanvas;
+}
+
 async function renderCanvas(){
   if(!images.length){ctx.clearRect(0,0,canvas.width,canvas.height);return}
   const cur=images[currentIdx],base=await loadImage(cur.dataURL),W=base.naturalWidth,H=base.naturalHeight;
@@ -380,18 +447,40 @@ async function renderCanvas(){
   const ews=ordered.filter(wm=>getWmState(cur,wm.id).enabled);
   const hasEr=cur.erasers&&cur.erasers.length>0;
 
+  // Pre-build eraser mask if needed
+  let eraserMask = null;
+  if (hasEr) {
+    eraserMask = buildEraserMask(cur.erasers, W, H);
+  }
+
   for(const wm of ews){
     const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),off=getOff(W,H),oc=off.getContext('2d');oc.clearRect(0,0,W,H);
     if(wm.type==='tile'){oc.fillStyle=oc.createPattern(wi,'repeat');oc.fillRect(0,0,W,H)}
     else{const bw=Math.min(wi.naturalWidth,W*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;oc.save();oc.translate(ws.x*W,ws.y*H);oc.rotate(ws.rotation*Math.PI/180);oc.drawImage(wi,-iw/2,-ih/2,iw,ih);oc.restore()}
-    if(hasEr){oc.globalCompositeOperation='destination-out';cur.erasers.forEach(er=>{oc.beginPath();oc.arc(er.x*W,er.y*H,er.r*W,0,Math.PI*2);oc.fill()});oc.globalCompositeOperation='source-over'}
+
+    // Apply eraser mask: multiply the watermark layer's alpha by the mask
+    if (eraserMask) {
+      oc.globalCompositeOperation = 'destination-in';
+      oc.drawImage(eraserMask, 0, 0);
+      oc.globalCompositeOperation = 'source-over';
+    }
+
     ctx.globalCompositeOperation=ws.blendMode||'normal';
     ctx.globalAlpha=ws.opacity!==undefined?ws.opacity:1;
     ctx.drawImage(off,0,0);relOff(off);
   }
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
 
-  if(hasEr){ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(200,168,126,0.5)';ctx.lineWidth=1.5;cur.erasers.forEach(er=>{ctx.beginPath();ctx.arc(er.x*W,er.y*H,er.r*W,0,Math.PI*2);ctx.stroke()});ctx.setLineDash([]);ctx.restore()}
+  // Draw eraser outlines for visual feedback
+  if(hasEr){
+    ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(200,168,126,0.5)';ctx.lineWidth=1.5;
+    cur.erasers.forEach(er=>{
+      ctx.beginPath();ctx.arc(er.x*W,er.y*H,er.r*W,0,Math.PI*2);ctx.stroke();
+    });
+    ctx.setLineDash([]);ctx.restore();
+  }
+
+  // Draw selection outline for selected icon
   if(selectedIconWmId!==null){const wm=watermarks.find(w=>w.id===selectedIconWmId);if(wm&&getWmState(cur,wm.id).enabled){const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),bw=Math.min(wi.naturalWidth,W*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;ctx.save();ctx.translate(ws.x*W,ws.y*H);ctx.rotate(ws.rotation*Math.PI/180);ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(200,168,126,0.7)';ctx.lineWidth=1.5;ctx.strokeRect(-iw/2,-ih/2,iw,ih);ctx.setLineDash([]);ctx.restore()}}
 }
 
@@ -413,7 +502,6 @@ function iconBounds(wm,cur){
 function findIcon(nx,ny){
   if(!images[currentIdx])return null;
   const cur=images[currentIdx];
-  // Search in reverse icon order (topmost first)
   const iconWms=[];
   wmOrderIcon.forEach(id=>{const wm=watermarks.find(w=>w.id===id);if(wm)iconWms.push(wm)});
   for(let i=iconWms.length-1;i>=0;i--){
@@ -434,15 +522,15 @@ function findEraserAt(cur,nx,ny){
     const er=cur.erasers[i];
     const dx=er.x-nx,dy=er.y-ny;
     const canvasAspect=canvas.height/canvas.width;
-    const dist=Math.sqrt(dx*dx+(dy/canvasAspect)*(dy/canvasAspect));
-    if(dist<er.r*1.2)return i;
+    const dist=Math.sqrt(dx*dx+(dy*canvasAspect)*(dy*canvasAspect));
+    // Hit test: click within the eraser circle radius (use a slightly larger area for easy clicking)
+    if(dist<er.r*1.3)return i;
   }
   return -1;
 }
 
 function onDown(e){
   if(!images.length)return;const cur=images[currentIdx];
-  // Pinch gesture for selected icon
   if(e.touches&&e.touches.length===2&&selectedIconWmId!==null){
     e.preventDefault();
     const selWm=watermarks.find(w=>w.id===selectedIconWmId);
@@ -459,14 +547,19 @@ function onDown(e){
   if(eraserMode){
     const hitIdx=findEraserAt(cur,c.x,c.y);
     if(hitIdx>=0){
-      applyToTargets(img=>{if(img.erasers&&img.erasers[hitIdx])img.erasers.splice(hitIdx,1)});
+      // Remove eraser (from all targets if sync)
+      applyToTargets(img=>{if(img.erasers&&img.erasers.length>hitIdx)img.erasers.splice(hitIdx,1)});
     }else{
-      const er={x:c.x,y:c.y,r:eraserRadius/canvas.width};
-      applyToTargets(img=>{img.erasers.push({x:er.x,y:er.y,r:er.r})});
+      // Add new eraser
+      const eType=document.getElementById('eraserType').value;
+      const eOpacity=parseInt(document.getElementById('eraserOpacity').value)/100;
+      const eHardness=parseInt(document.getElementById('eraserHardness').value)/100;
+      const er={x:c.x,y:c.y,r:eraserRadius/canvas.width,type:eType,opacity:eOpacity};
+      if(eType==='soft') er.hardness=eHardness;
+      applyToTargets(img=>{img.erasers.push({x:er.x,y:er.y,r:er.r,type:er.type,opacity:er.opacity,hardness:er.hardness})});
     }
     debouncedSave();queueRender();return;
   }
-  // Try to find an icon watermark under the pointer
   const hit=findIcon(c.x,c.y);
   if(hit){
     selectedIconWmId=hit.id;
@@ -541,11 +634,23 @@ async function renderFinal(imgObj){
   const ordered=getOrderedWatermarks();
   const ews=ordered.filter(wm=>getWmState(imgObj,wm.id).enabled);
   const hasEr=imgObj.erasers&&imgObj.erasers.length>0;
+
+  let eraserMask = null;
+  if (hasEr) {
+    eraserMask = buildEraserMask(imgObj.erasers, W, H);
+  }
+
   for(const wm of ews){
     const ws=getWmState(imgObj,wm.id),wi=await loadImage(wm.dataURL),off=document.createElement('canvas');off.width=W;off.height=H;const oc=off.getContext('2d');
     if(wm.type==='tile'){oc.fillStyle=oc.createPattern(wi,'repeat');oc.fillRect(0,0,W,H)}
     else{const bw=Math.min(wi.naturalWidth,W*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;oc.save();oc.translate(ws.x*W,ws.y*H);oc.rotate(ws.rotation*Math.PI/180);oc.drawImage(wi,-iw/2,-ih/2,iw,ih);oc.restore()}
-    if(hasEr){oc.globalCompositeOperation='destination-out';imgObj.erasers.forEach(er=>{oc.beginPath();oc.arc(er.x*W,er.y*H,er.r*W,0,Math.PI*2);oc.fill()});oc.globalCompositeOperation='source-over'}
+
+    if (eraserMask) {
+      oc.globalCompositeOperation = 'destination-in';
+      oc.drawImage(eraserMask, 0, 0);
+      oc.globalCompositeOperation = 'source-over';
+    }
+
     cx.globalCompositeOperation=ws.blendMode||'normal';
     cx.globalAlpha=ws.opacity!==undefined?ws.opacity:1;
     cx.drawImage(off,0,0);
