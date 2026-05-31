@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>水印工具</title>
 <style>
+@import url("https://fontsapi.zeoseven.com/444/main/result.css");
+@import url("https://fontsapi.zeoseven.com/65/main/result.css");
+@import url("https://fontsapi.zeoseven.com/256/main/result.css");
+@import url("https://fontsapi.zeoseven.com/107/main/result.css");
+@import url("https://fontsapi.zeoseven.com/137/main/result.css");
+
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#0f0f14;--card:#1b1b24;--accent:#3a3a5c;--highlight:#c8a87e;--highlight-dim:#9a7d5a;--text:#e8e4dc;--text-dim:#8a857c;--border:#2e2e3a;--radius:6px}
 html,body{height:100%;overflow:hidden}
@@ -13,11 +19,12 @@ button{cursor:pointer;border:1px solid var(--border);background:var(--accent);co
 button:hover{background:var(--highlight-dim);border-color:var(--highlight-dim);color:#fff}
 button:active{transform:scale(.97)}
 input[type="file"]{display:none}
-input[type="text"],select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:3px 7px;font-size:11px;outline:none;transition:border-color .15s}
+input[type="text"],input[type="color"],select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:3px 7px;font-size:11px;outline:none;transition:border-color .15s}
 input[type="text"]:focus,select:focus{border-color:var(--highlight)}
 select{padding:3px 5px}
 input[type="range"]{-webkit-appearance:none;height:3px;background:var(--border);border:none;border-radius:2px;outline:none}
 input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--highlight);cursor:pointer;border:2px solid var(--bg)}
+input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border-radius:4px}
 
 .toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;z-index:60}
 .toolbar-title{font-weight:600;font-size:13px;color:var(--highlight);margin-right:auto;letter-spacing:1px}
@@ -89,6 +96,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;hei
 .wm-row-sub label{font-size:9px;color:var(--text-dim);white-space:nowrap}
 .wm-row-sub input[type="range"]{width:50px}
 .wm-row-sub span{font-size:9px;color:var(--text-dim);min-width:22px;text-align:right}
+
+.text-wm-preview{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:3px;background:#222;font-size:12px;overflow:hidden;flex-shrink:0}
 
 @media(max-width:480px){
   .toolbar{padding:5px 7px;gap:5px}
@@ -168,6 +177,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;hei
     <div class="row">
       <button onclick="document.getElementById('fileIcon').click()">上传图标</button>
       <input type="file" id="fileIcon" accept="image/*">
+      <button onclick="openTextWmDialog()">添加文字</button>
     </div>
     <div class="wm-list" id="iconWmList"></div>
   </div>
@@ -183,12 +193,50 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;hei
   <button class="del-btn" onclick="deleteAllImages()">全部删除</button>
 </div>
 
+<!-- Text watermark dialog -->
+<div id="textWmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;width:90%;max-width:340px;display:flex;flex-direction:column;gap:8px">
+    <div style="font-size:12px;font-weight:600;color:var(--highlight)">添加文字水印</div>
+    <input type="text" id="twmText" placeholder="输入文字内容" style="width:100%;padding:6px 8px;font-size:12px">
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:10px;color:var(--text-dim)">字体</label>
+      <select id="twmFont" style="flex:1;font-size:10px;padding:3px 5px">
+        <option value="sans-serif">默认黑体</option>
+        <option value="serif">宋体</option>
+        <option value="YFHCT">手写体</option>
+        <option value="BoutiqueBitmap9x9 1.5 R">像素体</option>
+        <option value="Huiwen-mincho">古风体</option>
+        <option value="CaoShu Simp2Trad">草书</option>
+        <option value="Mengshen-Handwritten">萌萌手写体</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:10px;color:var(--text-dim)">颜色</label>
+      <input type="color" id="twmColor" value="#ffffff">
+      <label style="font-size:10px;color:var(--text-dim)">大小</label>
+      <input type="range" id="twmSize" min="12" max="400" value="48" style="width:70px">
+      <span id="twmSizeVal" style="font-size:10px;color:var(--text-dim)">48</span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <label style="font-size:10px;color:var(--text-dim)">粗体</label>
+      <div class="switch" id="twmBoldSwitch" onclick="this.classList.toggle('on')"></div>
+      <label style="font-size:10px;color:var(--text-dim)">斜体</label>
+      <div class="switch" id="twmItalicSwitch" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button onclick="closeTextWmDialog()">取消</button>
+      <button onclick="createTextWm()" style="background:var(--highlight-dim);border-color:var(--highlight)">确定</button>
+    </div>
+  </div>
+</div>
+
 <script>
 document.getElementById('exportFormat').addEventListener('change',function(){
   const j=this.value==='jpg';
   document.getElementById('jpgQuality').style.display=j?'':'none';
   document.getElementById('jpgQualityVal').style.display=j?'':'none';
 });
+document.getElementById('twmSize').addEventListener('input',function(){document.getElementById('twmSizeVal').textContent=this.value});
 
 function switchTab(el){
   const tid=el.dataset.tab;const was=el.classList.contains('active');
@@ -202,7 +250,36 @@ function updateEraserUI(){
   document.getElementById('softHardnessWrap').style.display=isSoft?'inline-flex':'none';
 }
 
-const DB_NAME='watermarkToolDB',DB_VER=7;let db=null;
+function openTextWmDialog(){document.getElementById('textWmOverlay').style.display='flex';document.getElementById('twmText').value='';document.getElementById('twmText').focus()}
+function closeTextWmDialog(){document.getElementById('textWmOverlay').style.display='none'}
+
+function textToDataURL(text,font,color,size,bold,italic){
+  const c=document.createElement('canvas'),cx=c.getContext('2d');
+  const style=(italic?'italic ':'')+(bold?'bold ':'')+size+'px "'+font+'", sans-serif';
+  cx.font=style;
+  const m=cx.measureText(text);
+  const w=Math.ceil(m.width)+10,h=Math.ceil(size*1.4)+10;
+  c.width=w;c.height=h;
+  cx.font=style;cx.fillStyle=color;cx.textBaseline='middle';cx.fillText(text,5,h/2);
+  return c.toDataURL('image/png');
+}
+
+async function createTextWm(){
+  const text=document.getElementById('twmText').value.trim();
+  if(!text){closeTextWmDialog();return}
+  const font=document.getElementById('twmFont').value;
+  const color=document.getElementById('twmColor').value;
+  const size=parseInt(document.getElementById('twmSize').value);
+  const bold=document.getElementById('twmBoldSwitch').classList.contains('on');
+  const italic=document.getElementById('twmItalicSwitch').classList.contains('on');
+  const du=textToDataURL(text,font,color,size,bold,italic);
+  const wm={name:'文字_'+text.substring(0,6),type:'icon',subtype:'text',dataURL:du,locked:false,
+    textData:{text,font,color,size,bold,italic}};
+  wm.id=await dbPut('watermarks',wm);watermarks.push(wm);wmOrderIcon.push(wm.id);
+  debouncedSave();refreshAll();closeTextWmDialog();
+}
+
+const DB_NAME='watermarkToolDB',DB_VER=8;let db=null;
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const d=e.target.result;['images','watermarks','state'].forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,s==='state'?{keyPath:'key'}:{keyPath:'id',autoIncrement:true})})};r.onsuccess=e=>{db=e.target.result;res(db)};r.onerror=rej})}
 function dbPut(s,v){return new Promise((r,j)=>{const tx=db.transaction(s,'readwrite');tx.objectStore(s).put(v).onsuccess=e=>r(e.target.result);tx.onerror=j})}
 function dbGetAll(s){return new Promise(r=>{db.transaction(s,'readonly').objectStore(s).getAll().onsuccess=e=>r(e.target.result)})}
@@ -251,6 +328,14 @@ function syncWmOrders(){
 function fileToDataURL(f){return new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f)})}
 function loadImage(src){if(imageCache.has(src))return Promise.resolve(imageCache.get(src));return new Promise((r,j)=>{const img=new Image();img.onload=()=>{imageCache.set(src,img);r(img)};img.onerror=j;img.src=src})}
 
+const DEFAULT_WM_STATE={enabled:false,blendMode:'normal',opacity:1,x:0.5,y:0.5,scale:1,rotation:0,ignoreEraser:false};
+const DEFAULT_TILE_STATE={enabled:false,blendMode:'normal',opacity:1,x:0,y:0,scale:1,rotation:0,ignoreEraser:false};
+
+function getDefaultState(wm){
+  if(wm.type==='tile')return {...DEFAULT_TILE_STATE};
+  return {...DEFAULT_WM_STATE};
+}
+
 document.getElementById('fileImg').addEventListener('change',async function(){
   const files=[...this.files];if(!files.length)return;
   for(const f of files){
@@ -260,9 +345,13 @@ document.getElementById('fileImg').addEventListener('change',async function(){
     watermarks.forEach(wm=>{
       if(curImg&&curImg.wmState[wm.id]){
         const src=curImg.wmState[wm.id];
-        newWmState[wm.id]={enabled:false,blendMode:src.blendMode||'normal',opacity:src.opacity!==undefined?src.opacity:1,x:src.x!==undefined?src.x:0.5,y:src.y!==undefined?src.y:0.5,scale:src.scale!==undefined?src.scale:1,rotation:src.rotation!==undefined?src.rotation:0};
+        const def=getDefaultState(wm);
+        newWmState[wm.id]={enabled:false,blendMode:src.blendMode||def.blendMode,opacity:src.opacity!==undefined?src.opacity:def.opacity,
+          x:src.x!==undefined?src.x:def.x,y:src.y!==undefined?src.y:def.y,
+          scale:src.scale!==undefined?src.scale:def.scale,rotation:src.rotation!==undefined?src.rotation:def.rotation,
+          ignoreEraser:src.ignoreEraser||false};
       }else{
-        newWmState[wm.id]={enabled:false,blendMode:'normal',opacity:1,x:0.5,y:0.5,scale:1,rotation:0};
+        newWmState[wm.id]={...getDefaultState(wm)};
       }
     });
     const o={dataURL:du,wmState:newWmState,erasers:[]};
@@ -274,11 +363,16 @@ document.getElementById('fileTile').addEventListener('change',async function(){i
 document.getElementById('fileIcon').addEventListener('change',async function(){if(!this.files[0])return;const du=await fileToDataURL(this.files[0]);const wm={name:'图标_'+(watermarks.filter(w=>w.type==='icon').length+1),type:'icon',dataURL:du,locked:false};wm.id=await dbPut('watermarks',wm);watermarks.push(wm);wmOrderIcon.push(wm.id);debouncedSave();refreshAll();this.value=''});
 
 function getWmState(imgObj,wmId){
-  if(!imgObj.wmState[wmId])imgObj.wmState[wmId]={enabled:false,blendMode:'normal',opacity:1,x:0.5,y:0.5,scale:1.0,rotation:0};
+  const wm=watermarks.find(w=>w.id===wmId);
+  const def=wm?getDefaultState(wm):DEFAULT_WM_STATE;
+  if(!imgObj.wmState[wmId])imgObj.wmState[wmId]={...def};
   const ws=imgObj.wmState[wmId];
-  if(ws.scale===undefined)ws.scale=1.0;
-  if(ws.rotation===undefined)ws.rotation=0;
-  if(ws.opacity===undefined)ws.opacity=1;
+  if(ws.scale===undefined)ws.scale=def.scale;
+  if(ws.rotation===undefined)ws.rotation=def.rotation;
+  if(ws.opacity===undefined)ws.opacity=def.opacity;
+  if(ws.x===undefined)ws.x=def.x;
+  if(ws.y===undefined)ws.y=def.y;
+  if(ws.ignoreEraser===undefined)ws.ignoreEraser=false;
   return ws;
 }
 
@@ -302,12 +396,19 @@ function startRename(span,wm){
 
 let dragWmId=null,dragType=null;
 
+function resetWmState(wm){
+  const def=getDefaultState(wm);
+  if(syncMode){images.forEach(img=>{img.wmState[wm.id]={...def}})}
+  else if(images[currentIdx]){images[currentIdx].wmState[wm.id]={...def}}
+  debouncedSave();refreshAll();
+}
+
 function renderWmLists(){
   const tL=document.getElementById('tileWmList'),iL=document.getElementById('iconWmList');tL.innerHTML='';iL.innerHTML='';
   const cur=images[currentIdx];
 
   function buildItem(wm,orderArr,container){
-    const ws=cur?getWmState(cur,wm.id):{enabled:false,blendMode:'normal',opacity:1,scale:1.0,rotation:0};
+    const ws=cur?getWmState(cur,wm.id):{...getDefaultState(wm)};
     const d=document.createElement('div');d.className='wm-item';d.dataset.wmId=wm.id;
     if(wm.locked)d.classList.add('locked');
 
@@ -320,14 +421,27 @@ function renderWmLists(){
     d.addEventListener('dragleave',()=>{d.style.borderColor='transparent'});
     d.addEventListener('drop',e=>{e.preventDefault();d.style.borderColor='transparent';if(dragWmId!==null&&dragType===wm.type){reorderWm(dragWmId,wm.id,orderArr);dragWmId=null;dragType=null}});
 
-    const th=document.createElement('img');th.src=wm.dataURL;d.appendChild(th);
+    // Thumbnail or text preview
+    if(wm.subtype==='text'&&wm.textData){
+      const tp=document.createElement('div');tp.className='text-wm-preview';tp.textContent='文';tp.style.color=wm.textData.color||'#fff';d.appendChild(tp);
+    }else{
+      const th=document.createElement('img');th.src=wm.dataURL;d.appendChild(th);
+    }
     const nm=document.createElement('span');nm.className='wm-name';nm.textContent=wm.name;nm.onclick=()=>{if(!wm.locked)startRename(nm,wm)};d.appendChild(nm);
 
     const controls=document.createElement('span');controls.className='wm-controls';controls.style.cssText='display:contents';
 
+    if(wm.type==='tile'){
+      // Tile scale
+      const sL=document.createElement('span');sL.className='wm-size-label';sL.textContent=Math.round(ws.scale*100)+'%';
+      const sR=document.createElement('input');sR.type='range';sR.min='10';sR.max='500';sR.value=Math.round(ws.scale*100);
+      sR.oninput=()=>{const v=parseInt(sR.value)/100;applyToTargets(img=>{getWmState(img,wm.id).scale=v});sL.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
+      controls.appendChild(sR);controls.appendChild(sL);
+    }
+
     if(wm.type==='icon'){
       const sL=document.createElement('span');sL.className='wm-size-label';sL.textContent=Math.round(ws.scale*100)+'%';
-      const sR=document.createElement('input');sR.type='range';sR.min='10';sR.max='300';sR.value=Math.round(ws.scale*100);
+      const sR=document.createElement('input');sR.type='range';sR.min='5';sR.max='1000';sR.value=Math.round(ws.scale*100);
       sR.oninput=()=>{const v=parseInt(sR.value)/100;applyToTargets(img=>{getWmState(img,wm.id).scale=v});sL.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
       controls.appendChild(sR);controls.appendChild(sL);
       const rL=document.createElement('span');rL.className='wm-size-label';rL.textContent=Math.round(ws.rotation)+'°';
@@ -344,12 +458,18 @@ function renderWmLists(){
 
     d.appendChild(controls);
 
+    // Reset button
+    const rstBtn=document.createElement('button');rstBtn.textContent='↺';rstBtn.title='重置';rstBtn.style.cssText='padding:1px 5px;font-size:11px;background:transparent;border-color:var(--border);color:var(--text-dim)';
+    rstBtn.onclick=()=>resetWmState(wm);d.appendChild(rstBtn);
+
     const lockBtn=document.createElement('button');lockBtn.className='wm-lock-btn';lockBtn.textContent=wm.locked?'🔒':'🔓';lockBtn.style.cssText='padding:1px 5px;font-size:11px;background:transparent;border-color:transparent;color:var(--text-dim)';
     lockBtn.onclick=()=>{wm.locked=!wm.locked;debouncedSave();refreshAll()};d.appendChild(lockBtn);
 
     const del=document.createElement('button');del.textContent='✕';del.style.cssText='padding:1px 5px;font-size:9px;background:transparent;border-color:var(--highlight-dim);color:var(--highlight)';
     del.onclick=async()=>{await dbDelete('watermarks',wm.id);watermarks=watermarks.filter(w=>w.id!==wm.id);const oIdx=orderArr.indexOf(wm.id);if(oIdx>=0)orderArr.splice(oIdx,1);images.forEach(img=>{delete img.wmState[wm.id]});if(selectedIconWmId===wm.id)selectedIconWmId=null;debouncedSave();refreshAll()};d.appendChild(del);
 
+    // Sub rows
+    // Opacity
     const subRow=document.createElement('div');subRow.className='wm-row-sub';
     const opLabel=document.createElement('label');opLabel.textContent='透明度';subRow.appendChild(opLabel);
     const opRange=document.createElement('input');opRange.type='range';opRange.min='0';opRange.max='100';opRange.value=Math.round(ws.opacity*100);
@@ -357,6 +477,16 @@ function renderWmLists(){
     opRange.oninput=()=>{const v=parseInt(opRange.value)/100;applyToTargets(img=>{getWmState(img,wm.id).opacity=v});opVal.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
     subRow.appendChild(opRange);subRow.appendChild(opVal);
     d.appendChild(subRow);
+
+    // Ignore eraser (icon only)
+    if(wm.type==='icon'){
+      const erRow=document.createElement('div');erRow.className='wm-row-sub';
+      const erLabel=document.createElement('label');erLabel.textContent='无视橡皮擦';erRow.appendChild(erLabel);
+      const erSw=document.createElement('div');erSw.className='switch'+(ws.ignoreEraser?' on':'');erSw.style.cssText='width:26px;height:13px;flex-shrink:0';
+      erSw.onclick=()=>{const nv=!getWmState(cur,wm.id).ignoreEraser;applyToTargets(img=>{getWmState(img,wm.id).ignoreEraser=nv});erSw.classList.toggle('on',nv);debouncedSave();queueRender()};
+      erRow.appendChild(erSw);
+      d.appendChild(erRow);
+    }
 
     container.appendChild(d);
   }
@@ -385,25 +515,16 @@ function getOrderedWatermarks(){
   return result;
 }
 
-/* ===== Eraser mask generation ===== */
 function buildEraserMask(erasers, W, H) {
-  // Returns a canvas of size W x H where alpha=0 means fully erased, alpha=255 means fully visible
-  // We build it as an "erase amount" map first, then invert
   const maskCanvas = document.createElement('canvas');
   maskCanvas.width = W; maskCanvas.height = H;
   const mctx = maskCanvas.getContext('2d');
-
-  // Start fully opaque (white = keep everything)
   mctx.fillStyle = '#fff';
   mctx.fillRect(0, 0, W, H);
-
-  // For each eraser, punch a hole
   for (const er of erasers) {
     const cx = er.x * W, cy = er.y * H, rPx = er.r * W;
     const strength = er.opacity !== undefined ? er.opacity : 1;
-
     if (er.type === 'hard' || !er.type) {
-      // Hard eraser: solid circle, use destination-out
       mctx.globalCompositeOperation = 'destination-out';
       mctx.globalAlpha = strength;
       mctx.beginPath();
@@ -412,12 +533,7 @@ function buildEraserMask(erasers, W, H) {
       mctx.globalCompositeOperation = 'source-over';
       mctx.globalAlpha = 1;
     } else {
-      // Soft eraser with hardness
       const hardness = er.hardness !== undefined ? er.hardness : 0.5;
-      // hardness 0 = fully soft gradient from center to edge
-      // hardness 1 = almost hard, only tiny soft edge
-      // We create a radial gradient: center is fully erased, edge is not erased
-      // The "hard core" occupies hardness fraction of radius
       mctx.globalCompositeOperation = 'destination-out';
       mctx.globalAlpha = 1;
       const grad = mctx.createRadialGradient(cx, cy, 0, cx, cy, rPx);
@@ -437,6 +553,27 @@ function buildEraserMask(erasers, W, H) {
   return maskCanvas;
 }
 
+function drawTileWatermark(oc, wi, ws, W, H) {
+  const sc = ws.scale || 1;
+  const tw = wi.naturalWidth * sc, th = wi.naturalHeight * sc;
+  if(tw < 1 || th < 1) return;
+
+  // Create a scaled tile pattern
+  const patCanvas = document.createElement('canvas');
+  patCanvas.width = tw; patCanvas.height = th;
+  const pctx = patCanvas.getContext('2d');
+  pctx.drawImage(wi, 0, 0, tw, th);
+
+  const pat = oc.createPattern(patCanvas, 'repeat');
+  oc.save();
+  // Offset by ws.x * W and ws.y * H to allow dragging
+  const ox = (ws.x || 0) * W, oy = (ws.y || 0) * H;
+  oc.translate(ox, oy);
+  oc.fillStyle = pat;
+  oc.fillRect(-ox, -oy, W, H);
+  oc.restore();
+}
+
 async function renderCanvas(){
   if(!images.length){ctx.clearRect(0,0,canvas.width,canvas.height);return}
   const cur=images[currentIdx],base=await loadImage(cur.dataURL),W=base.naturalWidth,H=base.naturalHeight;
@@ -447,7 +584,6 @@ async function renderCanvas(){
   const ews=ordered.filter(wm=>getWmState(cur,wm.id).enabled);
   const hasEr=cur.erasers&&cur.erasers.length>0;
 
-  // Pre-build eraser mask if needed
   let eraserMask = null;
   if (hasEr) {
     eraserMask = buildEraserMask(cur.erasers, W, H);
@@ -455,11 +591,18 @@ async function renderCanvas(){
 
   for(const wm of ews){
     const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),off=getOff(W,H),oc=off.getContext('2d');oc.clearRect(0,0,W,H);
-    if(wm.type==='tile'){oc.fillStyle=oc.createPattern(wi,'repeat');oc.fillRect(0,0,W,H)}
-    else{const bw=Math.min(wi.naturalWidth,W*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;oc.save();oc.translate(ws.x*W,ws.y*H);oc.rotate(ws.rotation*Math.PI/180);oc.drawImage(wi,-iw/2,-ih/2,iw,ih);oc.restore()}
+    if(wm.type==='tile'){
+      drawTileWatermark(oc, wi, ws, W, H);
+    }
+    else{
+      const bw=wi.naturalWidth,bh=wi.naturalHeight;
+      const iw=bw*ws.scale,ih=bh*ws.scale;
+      oc.save();oc.translate(ws.x*W,ws.y*H);oc.rotate(ws.rotation*Math.PI/180);oc.drawImage(wi,-iw/2,-ih/2,iw,ih);oc.restore();
+    }
 
-    // Apply eraser mask: multiply the watermark layer's alpha by the mask
-    if (eraserMask) {
+    // Apply eraser mask if not ignoring eraser
+    const shouldErase = eraserMask && !ws.ignoreEraser;
+    if (shouldErase) {
       oc.globalCompositeOperation = 'destination-in';
       oc.drawImage(eraserMask, 0, 0);
       oc.globalCompositeOperation = 'source-over';
@@ -471,7 +614,6 @@ async function renderCanvas(){
   }
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
 
-  // Draw eraser outlines for visual feedback
   if(hasEr){
     ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(200,168,126,0.5)';ctx.lineWidth=1.5;
     cur.erasers.forEach(er=>{
@@ -480,8 +622,7 @@ async function renderCanvas(){
     ctx.setLineDash([]);ctx.restore();
   }
 
-  // Draw selection outline for selected icon
-  if(selectedIconWmId!==null){const wm=watermarks.find(w=>w.id===selectedIconWmId);if(wm&&getWmState(cur,wm.id).enabled){const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),bw=Math.min(wi.naturalWidth,W*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;ctx.save();ctx.translate(ws.x*W,ws.y*H);ctx.rotate(ws.rotation*Math.PI/180);ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(200,168,126,0.7)';ctx.lineWidth=1.5;ctx.strokeRect(-iw/2,-ih/2,iw,ih);ctx.setLineDash([]);ctx.restore()}}
+  if(selectedIconWmId!==null){const wm=watermarks.find(w=>w.id===selectedIconWmId);if(wm&&getWmState(cur,wm.id).enabled){const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),iw=wi.naturalWidth*ws.scale,ih=wi.naturalHeight*ws.scale;ctx.save();ctx.translate(ws.x*W,ws.y*H);ctx.rotate(ws.rotation*Math.PI/180);ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(200,168,126,0.7)';ctx.lineWidth=1.5;ctx.strokeRect(-iw/2,-ih/2,iw,ih);ctx.setLineDash([]);ctx.restore()}}
 }
 
 let dragState=null,pinchDist0=null,pinchScale0=null,pinchAng0=null,pinchRot0=null;
@@ -495,7 +636,7 @@ function inRotRect(px,py,cx,cy,hw,hh,rd){
 function iconBounds(wm,cur){
   const ws=getWmState(cur,wm.id),wi=imageCache.get(wm.dataURL);
   if(!wi)return null;
-  const bw=Math.min(wi.naturalWidth,canvas.width*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;
+  const iw=wi.naturalWidth*ws.scale,ih=wi.naturalHeight*ws.scale;
   return{cx:ws.x,cy:ws.y,hw:iw/(2*canvas.width),hh:ih/(2*canvas.height),r:ws.rotation};
 }
 
@@ -514,6 +655,19 @@ function findIcon(nx,ny){
   return null;
 }
 
+// Tile dragging
+function findTile(nx,ny){
+  if(!images[currentIdx])return null;
+  const cur=images[currentIdx];
+  const tileWms=[];
+  wmOrderTile.forEach(id=>{const wm=watermarks.find(w=>w.id===id);if(wm)tileWms.push(wm)});
+  for(let i=tileWms.length-1;i>=0;i--){
+    const wm=tileWms[i];
+    if(getWmState(cur,wm.id).enabled&&!wm.locked)return wm;
+  }
+  return null;
+}
+
 function tDist(a,b){return Math.sqrt((a.clientX-b.clientX)**2+(a.clientY-b.clientY)**2)}
 function tAng(a,b){return Math.atan2(b.clientY-a.clientY,b.clientX-a.clientX)*180/Math.PI}
 
@@ -523,7 +677,6 @@ function findEraserAt(cur,nx,ny){
     const dx=er.x-nx,dy=er.y-ny;
     const canvasAspect=canvas.height/canvas.width;
     const dist=Math.sqrt(dx*dx+(dy*canvasAspect)*(dy*canvasAspect));
-    // Hit test: click within the eraser circle radius (use a slightly larger area for easy clicking)
     if(dist<er.r*1.3)return i;
   }
   return -1;
@@ -547,10 +700,8 @@ function onDown(e){
   if(eraserMode){
     const hitIdx=findEraserAt(cur,c.x,c.y);
     if(hitIdx>=0){
-      // Remove eraser (from all targets if sync)
       applyToTargets(img=>{if(img.erasers&&img.erasers.length>hitIdx)img.erasers.splice(hitIdx,1)});
     }else{
-      // Add new eraser
       const eType=document.getElementById('eraserType').value;
       const eOpacity=parseInt(document.getElementById('eraserOpacity').value)/100;
       const eHardness=parseInt(document.getElementById('eraserHardness').value)/100;
@@ -560,16 +711,27 @@ function onDown(e){
     }
     debouncedSave();queueRender();return;
   }
+
+  // Try icon first
   const hit=findIcon(c.x,c.y);
   if(hit){
     selectedIconWmId=hit.id;
     const ws=getWmState(cur,hit.id);
-    dragState={t:'move',wid:hit.id,ox:c.x-ws.x,oy:c.y-ws.y};
-    queueRender();
-  }else{
-    selectedIconWmId=null;
-    queueRender();
+    dragState={t:'move',wid:hit.id,wtype:'icon',ox:c.x-ws.x,oy:c.y-ws.y};
+    queueRender();return;
   }
+
+  // Try tile drag
+  const tileHit=findTile(c.x,c.y);
+  if(tileHit){
+    selectedIconWmId=null;
+    const ws=getWmState(cur,tileHit.id);
+    dragState={t:'move',wid:tileHit.id,wtype:'tile',ox:c.x-ws.x,oy:c.y-ws.y};
+    queueRender();return;
+  }
+
+  selectedIconWmId=null;
+  queueRender();
 }
 
 function onMove(e){
@@ -583,13 +745,14 @@ function onMove(e){
   e.preventDefault();const cur=images[currentIdx];
   if(dragState.t==='pinch'&&e.touches&&e.touches.length===2){
     const dist=tDist(e.touches[0],e.touches[1]),ang=tAng(e.touches[0],e.touches[1]);
-    const ns=Math.max(.1,Math.min(3,pinchScale0*(dist/pinchDist0))),nr=pinchRot0+(ang-pinchAng0);
+    const ns=Math.max(.1,Math.min(10,pinchScale0*(dist/pinchDist0))),nr=pinchRot0+(ang-pinchAng0);
     applyToTargets(img=>{const ws=getWmState(img,selectedIconWmId);ws.scale=ns;ws.rotation=nr});
     queueRender();debouncedSave();renderWmLists();return;
   }
   if(dragState.t==='move'){
     const c=getCC(e);
-    applyToTargets(img=>{const ws=getWmState(img,dragState.wid);ws.x=Math.max(0,Math.min(1,c.x-dragState.ox));ws.y=Math.max(0,Math.min(1,c.y-dragState.oy))});
+    const nx=c.x-dragState.ox, ny=c.y-dragState.oy;
+    applyToTargets(img=>{const ws=getWmState(img,dragState.wid);ws.x=nx;ws.y=ny});
     queueRender();debouncedSave();
   }
 }
@@ -616,7 +779,7 @@ canvas.addEventListener('wheel',e=>{
     applyToTargets(img=>{getWmState(img,selectedIconWmId).rotation=(getWmState(img,selectedIconWmId).rotation+d)%360});
   }else{
     const d=e.deltaY>0?-.05:.05;
-    applyToTargets(img=>{const ws=getWmState(img,selectedIconWmId);ws.scale=Math.max(.1,Math.min(3,ws.scale+d))});
+    applyToTargets(img=>{const ws=getWmState(img,selectedIconWmId);ws.scale=Math.max(.05,Math.min(10,ws.scale+d))});
   }
   queueRender();debouncedSave();renderWmLists();
 },{passive:false});
@@ -642,10 +805,16 @@ async function renderFinal(imgObj){
 
   for(const wm of ews){
     const ws=getWmState(imgObj,wm.id),wi=await loadImage(wm.dataURL),off=document.createElement('canvas');off.width=W;off.height=H;const oc=off.getContext('2d');
-    if(wm.type==='tile'){oc.fillStyle=oc.createPattern(wi,'repeat');oc.fillRect(0,0,W,H)}
-    else{const bw=Math.min(wi.naturalWidth,W*.3),bh=bw*(wi.naturalHeight/wi.naturalWidth),iw=bw*ws.scale,ih=bh*ws.scale;oc.save();oc.translate(ws.x*W,ws.y*H);oc.rotate(ws.rotation*Math.PI/180);oc.drawImage(wi,-iw/2,-ih/2,iw,ih);oc.restore()}
+    if(wm.type==='tile'){
+      drawTileWatermark(oc, wi, ws, W, H);
+    }
+    else{
+      const iw=wi.naturalWidth*ws.scale,ih=wi.naturalHeight*ws.scale;
+      oc.save();oc.translate(ws.x*W,ws.y*H);oc.rotate(ws.rotation*Math.PI/180);oc.drawImage(wi,-iw/2,-ih/2,iw,ih);oc.restore();
+    }
 
-    if (eraserMask) {
+    const shouldErase = eraserMask && !ws.ignoreEraser;
+    if (shouldErase) {
       oc.globalCompositeOperation = 'destination-in';
       oc.drawImage(eraserMask, 0, 0);
       oc.globalCompositeOperation = 'source-over';
