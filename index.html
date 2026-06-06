@@ -64,7 +64,8 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 .wm-item img{width:24px;height:24px;object-fit:contain;border-radius:3px;background:#222}
 .wm-item .wm-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:1px 3px;border-radius:3px;border:1px solid transparent;min-width:36px;color:var(--text);font-size:10px}
 .wm-item .wm-name:hover{border-color:var(--border)}
-.wm-item .wm-size-label{font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:26px;text-align:right}
+.wm-item .wm-size-label{font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:26px;text-align:right;cursor:pointer;border-radius:3px;padding:1px 3px;border:1px solid transparent;transition:border-color .15s}
+.wm-item .wm-size-label:hover{border-color:var(--border)}
 .wm-item input[type="range"]{width:40px}
 .wm-item select{font-size:10px;padding:2px 3px}
 .wm-item button{padding:2px 6px;font-size:9px}
@@ -99,6 +100,10 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 
 .text-wm-preview{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:3px;background:#222;font-size:12px;overflow:hidden;flex-shrink:0}
 
+.editable-value{cursor:pointer;border:1px solid transparent;border-radius:3px;padding:1px 3px;transition:border-color .15s}
+.editable-value:hover{border-color:var(--border)}
+.editable-value-input{background:var(--bg);color:var(--text);border:1px solid var(--highlight);border-radius:3px;padding:1px 4px;font-size:9px;width:42px;text-align:right;outline:none}
+
 @media(max-width:480px){
   .toolbar{padding:5px 7px;gap:5px}
   .tab-content{padding:5px 7px;max-height:20vh}
@@ -119,6 +124,9 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
   <div class="toolbar-group">
     <button onclick="document.getElementById('fileImg').click()">上传图片</button>
     <input type="file" id="fileImg" accept="image/*" multiple>
+  </div>
+  <div class="toolbar-group">
+    <button onclick="syncAllFromCurrent()" title="将当前图片的所有水印设置同步到其他所有图片（不同步橡皮擦）" style="background:#4a3a6c;border-color:#6a5a8c;font-size:10px;padding:4px 10px">全同步</button>
   </div>
   <div class="toolbar-group">
     <div class="switch-wrap"><label>同步</label><div class="switch" id="syncSwitch" onclick="toggleSync()"></div></div>
@@ -176,8 +184,7 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
   <div class="tab-content" id="tabIcon">
     <div class="row">
       <button onclick="document.getElementById('fileIcon').click()">上传图标</button>
-      <input type="file" id="fileIcon" accept="image/*">
-      <button onclick="openTextWmDialog()">添加文字</button>
+      <input type="file" id="fileIcon" accept="image/*"><button onclick="openTextWmDialog()">添加文字</button>
     </div>
     <div class="wm-list" id="iconWmList"></div>
   </div>
@@ -194,17 +201,17 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 </div>
 
 <!-- Text watermark dialog -->
-<div id="textWmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:none;align-items:center;justify-content:center">
+<div id="textWmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center">
   <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;width:90%;max-width:340px;display:flex;flex-direction:column;gap:8px">
     <div style="font-size:12px;font-weight:600;color:var(--highlight)">添加文字水印</div>
-    <input type="text" id="twmText" placeholder="输入文字内容" style="width:100%;padding:6px 8px;font-size:12px">
+    <input type="text" id="twmText" placeholder="输入文字内容" style="width:100%;padding:6px8px;font-size:12px">
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <label style="font-size:10px;color:var(--text-dim)">字体</label>
       <select id="twmFont" style="flex:1;font-size:10px;padding:3px 5px">
         <option value="sans-serif">默认黑体</option>
         <option value="serif">宋体</option>
         <option value="YFHCT">手写体</option>
-        <option value="BoutiqueBitmap9x9 1.5 R">像素体</option>
+        <option value="BoutiqueBitmap9x91.5R">像素体</option>
         <option value="Huiwen-mincho">古风体</option>
         <option value="CaoShu Simp2Trad">草书</option>
         <option value="Mengshen-Handwritten">萌萌手写体</option>
@@ -277,6 +284,51 @@ async function createTextWm(){
     textData:{text,font,color,size,bold,italic}};
   wm.id=await dbPut('watermarks',wm);watermarks.push(wm);wmOrderIcon.push(wm.id);
   debouncedSave();refreshAll();closeTextWmDialog();
+}
+
+// === Full Sync Button ===
+function syncAllFromCurrent(){
+  if(!images.length)return;
+  if(images.length<2)return;
+  const cur=images[currentIdx];
+  if(!confirm('将当前图片的所有水印设置同步到其他全部图片？（不含橡皮擦）'))return;
+  const srcState=cur.wmState;
+  for(let i=0;i<images.length;i++){
+    if(i===currentIdx)continue;
+    const target=images[i];
+    target.wmState={};
+    for(const wmId in srcState){
+      target.wmState[wmId]=JSON.parse(JSON.stringify(srcState[wmId]));
+    }
+  }
+  debouncedSave();refreshAll();
+}
+
+// === Editable Value Helper ===
+function makeEditableValue(span,currentVal,suffix,min,max,onChange){
+  span.addEventListener('click',function(){
+    if(span.querySelector('input'))return;
+    const inp=document.createElement('input');
+    inp.type='text';
+    inp.className='editable-value-input';
+    inp.value=parseFloat(currentVal()).toFixed(suffix==='°'?0:(suffix==='%'?0:1));
+    const origText=span.textContent;
+    span.textContent='';
+    span.appendChild(inp);
+    inp.focus();inp.select();
+    const commit=()=>{
+      let v=parseFloat(inp.value);
+      if(isNaN(v))v=parseFloat(origText);
+      if(isNaN(v))v=min;
+      v=Math.max(min,Math.min(max,v));
+      onChange(v);
+      span.textContent=(suffix==='%'?Math.round(v):Math.round(v))+suffix;};
+    inp.addEventListener('blur',commit);
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();inp.blur();}
+      if(e.key==='Escape'){inp.value=origText;inp.blur();}
+    });
+  });
 }
 
 const DB_NAME='watermarkToolDB',DB_VER=8;let db=null;
@@ -437,6 +489,10 @@ function renderWmLists(){
       const sR=document.createElement('input');sR.type='range';sR.min='10';sR.max='500';sR.value=Math.round(ws.scale*100);
       sR.oninput=()=>{const v=parseInt(sR.value)/100;applyToTargets(img=>{getWmState(img,wm.id).scale=v});sL.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
       controls.appendChild(sR);controls.appendChild(sL);
+      // Make scale label editable
+      makeEditableValue(sL,()=>ws.scale*100,'%',10,500,v=>{
+        const nv=v/100;sR.value=Math.round(v);applyToTargets(img=>{getWmState(img,wm.id).scale=nv});queueRender();debouncedSave();
+      });
     }
 
     if(wm.type==='icon'){
@@ -444,10 +500,19 @@ function renderWmLists(){
       const sR=document.createElement('input');sR.type='range';sR.min='5';sR.max='1000';sR.value=Math.round(ws.scale*100);
       sR.oninput=()=>{const v=parseInt(sR.value)/100;applyToTargets(img=>{getWmState(img,wm.id).scale=v});sL.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
       controls.appendChild(sR);controls.appendChild(sL);
+      // Make scale label editable
+      makeEditableValue(sL,()=>ws.scale*100,'%',5,1000,v=>{
+        const nv=v/100;sR.value=Math.round(v);applyToTargets(img=>{getWmState(img,wm.id).scale=nv});queueRender();debouncedSave();
+      });
+
       const rL=document.createElement('span');rL.className='wm-size-label';rL.textContent=Math.round(ws.rotation)+'°';
       const rR=document.createElement('input');rR.type='range';rR.min='-180';rR.max='180';rR.value=Math.round(ws.rotation);
       rR.oninput=()=>{const v=parseInt(rR.value);applyToTargets(img=>{getWmState(img,wm.id).rotation=v});rL.textContent=v+'°';queueRender();debouncedSave()};
       controls.appendChild(rR);controls.appendChild(rL);
+      // Make rotation label editable
+      makeEditableValue(rL,()=>ws.rotation,'°',-180,180,v=>{
+        const nv=Math.round(v);rR.value=nv;applyToTargets(img=>{getWmState(img,wm.id).rotation=nv});queueRender();debouncedSave();
+      });
     }
 
     const sel=document.createElement('select');BLEND_MODES.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=BLEND_LABELS[m]||m;if(ws.blendMode===m)o.selected=true;sel.appendChild(o)});
@@ -530,8 +595,7 @@ function buildEraserMask(erasers, W, H) {
       mctx.beginPath();
       mctx.arc(cx, cy, rPx, 0, Math.PI * 2);
       mctx.fill();
-      mctx.globalCompositeOperation = 'source-over';
-      mctx.globalAlpha = 1;
+      mctx.globalCompositeOperation = 'source-over';mctx.globalAlpha = 1;
     } else {
       const hardness = er.hardness !== undefined ? er.hardness : 0.5;
       mctx.globalCompositeOperation = 'destination-out';
@@ -558,7 +622,6 @@ function drawTileWatermark(oc, wi, ws, W, H) {
   const tw = wi.naturalWidth * sc, th = wi.naturalHeight * sc;
   if(tw < 1 || th < 1) return;
 
-  // Create a scaled tile pattern
   const patCanvas = document.createElement('canvas');
   patCanvas.width = tw; patCanvas.height = th;
   const pctx = patCanvas.getContext('2d');
@@ -566,7 +629,6 @@ function drawTileWatermark(oc, wi, ws, W, H) {
 
   const pat = oc.createPattern(patCanvas, 'repeat');
   oc.save();
-  // Offset by ws.x * W and ws.y * H to allow dragging
   const ox = (ws.x || 0) * W, oy = (ws.y || 0) * H;
   oc.translate(ox, oy);
   oc.fillStyle = pat;
@@ -600,7 +662,6 @@ async function renderCanvas(){
       oc.save();oc.translate(ws.x*W,ws.y*H);oc.rotate(ws.rotation*Math.PI/180);oc.drawImage(wi,-iw/2,-ih/2,iw,ih);oc.restore();
     }
 
-    // Apply eraser mask if not ignoring eraser
     const shouldErase = eraserMask && !ws.ignoreEraser;
     if (shouldErase) {
       oc.globalCompositeOperation = 'destination-in';
@@ -655,7 +716,6 @@ function findIcon(nx,ny){
   return null;
 }
 
-// Tile dragging
 function findTile(nx,ny){
   if(!images[currentIdx])return null;
   const cur=images[currentIdx];
@@ -712,7 +772,6 @@ function onDown(e){
     debouncedSave();queueRender();return;
   }
 
-  // Try icon first
   const hit=findIcon(c.x,c.y);
   if(hit){
     selectedIconWmId=hit.id;
@@ -721,7 +780,6 @@ function onDown(e){
     queueRender();return;
   }
 
-  // Try tile drag
   const tileHit=findTile(c.x,c.y);
   if(tileHit){
     selectedIconWmId=null;
@@ -822,8 +880,7 @@ async function renderFinal(imgObj){
 
     cx.globalCompositeOperation=ws.blendMode||'normal';
     cx.globalAlpha=ws.opacity!==undefined?ws.opacity:1;
-    cx.drawImage(off,0,0);
-  }
+    cx.drawImage(off,0,0);}
   cx.globalCompositeOperation='source-over';cx.globalAlpha=1;return c;
 }
 
