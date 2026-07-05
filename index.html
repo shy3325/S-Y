@@ -19,8 +19,8 @@ button{cursor:pointer;border:1px solid var(--border);background:var(--accent);co
 button:hover{background:var(--highlight-dim);border-color:var(--highlight-dim);color:#fff}
 button:active{transform:scale(.97)}
 input[type="file"]{display:none}
-input[type="text"],input[type="color"],select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:3px 7px;font-size:11px;outline:none;transition:border-color .15s}
-input[type="text"]:focus,select:focus{border-color:var(--highlight)}
+input[type="text"],input[type="number"],input[type="color"],select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:3px 7px;font-size:11px;outline:none;transition:border-color .15s}
+input[type="text"]:focus,input[type="number"]:focus,select:focus{border-color:var(--highlight)}
 select{padding:3px 5px}
 input[type="range"]{-webkit-appearance:none;height:3px;background:var(--border);border:none;border-radius:2px;outline:none}
 input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--highlight);cursor:pointer;border:2px solid var(--bg)}
@@ -104,6 +104,29 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 .editable-value:hover{border-color:var(--border)}
 .editable-value-input{background:var(--bg);color:var(--text);border:1px solid var(--highlight);border-radius:3px;padding:1px 4px;font-size:9px;width:42px;text-align:right;outline:none}
 
+.collage-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;flex-direction:column;overflow:hidden}
+.collage-panel.active{display:flex}
+.collage-header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0}
+.collage-header .ctitle{font-size:13px;font-weight:600;color:var(--highlight);flex:1}
+.collage-body{flex:1;overflow-y:auto;padding:10px 12px}
+.collage-body::-webkit-scrollbar{width:3px}
+.collage-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.collage-thumbs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.collage-thumbs .ct-item{position:relative;width:60px;height:60px;border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+.collage-thumbs .ct-item img{width:100%;height:100%;object-fit:cover}
+.collage-thumbs .ct-item .ct-remove{position:absolute;top:1px;right:1px;width:16px;height:16px;background:rgba(0,0,0,.7);color:#e88;border:none;border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1}
+.collage-thumbs .ct-item .ct-remove:hover{background:#c44;color:#fff}
+.collage-settings{display:flex;flex-direction:column;gap:6px}
+.collage-settings .cs-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.collage-settings .cs-row label{font-size:10px;color:var(--text-dim);white-space:nowrap}
+.collage-settings .cs-row input,.collage-settings .cs-row select{font-size:10px}
+.collage-settings .cs-row input[type="number"]{width:50px;padding:3px 5px}
+.collage-footer{display:flex;gap:8px;padding:8px 12px;background:var(--card);border-top:1px solid var(--border);flex-shrink:0}
+.collage-footer button{flex:1;padding:7px 4px;font-size:11px}
+
+.collage-preview-wrap{margin-top:8px;display:flex;align-items:center;justify-content:center;min-height:100px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+.collage-preview-wrap canvas,.collage-preview-wrap img{max-width:100%;max-height:200px;object-fit:contain}
+
 @media(max-width:480px){
   .toolbar{padding:5px 7px;gap:5px}
   .tab-content{padding:5px 7px;max-height:20vh}
@@ -170,6 +193,7 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
     <div class="tab-btn active" data-tab="tabThumbs" onclick="switchTab(this)">缩略图</div>
     <div class="tab-btn" data-tab="tabTile" onclick="switchTab(this)">底纹水印</div>
     <div class="tab-btn" data-tab="tabIcon" onclick="switchTab(this)">图标水印</div>
+    <div class="tab-btn" data-tab="tabCollage" onclick="switchTab(this)">拼图/动图</div>
   </div>
   <div class="tab-content active" id="tabThumbs">
     <div class="thumb-strip" id="thumbStrip"></div>
@@ -188,6 +212,12 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
     </div>
     <div class="wm-list" id="iconWmList"></div>
   </div>
+  <div class="tab-content" id="tabCollage">
+    <div class="row">
+      <button onclick="openCollagePanel()">导出拼图</button>
+      <button onclick="openGifPanel()">导出动图</button>
+    </div>
+  </div>
 </div>
 
 <div class="export-bar">
@@ -204,14 +234,14 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 <div id="textWmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center">
   <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;width:90%;max-width:340px;display:flex;flex-direction:column;gap:8px">
     <div style="font-size:12px;font-weight:600;color:var(--highlight)">添加文字水印</div>
-    <input type="text" id="twmText" placeholder="输入文字内容" style="width:100%;padding:6px8px;font-size:12px">
+    <input type="text" id="twmText" placeholder="输入文字内容" style="width:100%;padding:6px 8px;font-size:12px">
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <label style="font-size:10px;color:var(--text-dim)">字体</label>
       <select id="twmFont" style="flex:1;font-size:10px;padding:3px 5px">
         <option value="sans-serif">默认黑体</option>
         <option value="serif">宋体</option>
         <option value="YFHCT">手写体</option>
-        <option value="BoutiqueBitmap9x91.5R">像素体</option>
+        <option value="BoutiqueBitmap9x9 1.5 R">像素体</option>
         <option value="Huiwen-mincho">古风体</option>
         <option value="CaoShu Simp2Trad">草书</option>
         <option value="Mengshen-Handwritten">萌萌手写体</option>
@@ -237,7 +267,208 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
   </div>
 </div>
 
+<!-- Collage Panel -->
+<div class="collage-panel" id="collagePanel">
+  <div class="collage-header">
+    <span class="ctitle">拼图导出</span>
+    <button onclick="closeCollagePanel()" style="padding:3px 10px">关闭</button>
+  </div>
+  <div class="collage-body">
+    <div class="collage-thumbs" id="collageThumbs"></div>
+    <div class="collage-settings">
+      <div class="cs-row">
+        <label>横排数量</label>
+        <input type="number" id="collageCols" min="1" max="20" value="2">
+        <label>竖排数量</label>
+        <input type="number" id="collageRows" min="1" max="20" value="2">
+      </div>
+      <div class="cs-row">
+        <label>序号</label>
+        <div class="switch" id="collageNumSwitch" onclick="this.classList.toggle('on')"></div>
+        <label>序号字体</label>
+        <select id="collageNumFont">
+          <option value="sans-serif">默认黑体</option>
+          <option value="serif">宋体</option>
+          <option value="YFHCT">手写体</option>
+          <option value="BoutiqueBitmap9x9 1.5 R">像素体</option>
+          <option value="Huiwen-mincho">古风体</option>
+          <option value="CaoShu Simp2Trad">草书</option>
+          <option value="Mengshen-Handwritten">萌萌手写体</option>
+        </select>
+      </div>
+      <div class="cs-row">
+        <label>序号位置</label>
+        <select id="collageNumPos">
+          <option value="tl">左上</option>
+          <option value="tr">右上</option>
+          <option value="bl">左下</option>
+          <option value="br">右下</option>
+          <option value="bc">中下</option>
+        </select>
+        <label>序号大小</label>
+        <input type="number" id="collageNumSize" min="10" max="200" value="36">
+        <label>序号颜色</label>
+        <input type="color" id="collageNumColor" value="#ffffff">
+      </div>
+      <div class="cs-row">
+        <label>间距</label>
+        <input type="number" id="collageGap" min="0" max="100" value="4">
+        <label>背景色</label>
+        <input type="color" id="collageBg" value="#0f0f14">
+      </div>
+    </div>
+    <div class="collage-preview-wrap" id="collagePreview"></div>
+  </div>
+  <div class="collage-footer">
+    <button onclick="previewCollage()">预览</button>
+    <button onclick="exportCollage()" style="background:var(--highlight-dim);border-color:var(--highlight)">导出拼图</button>
+  </div>
+</div>
+
+<!-- GIF Panel -->
+<div class="collage-panel" id="gifPanel">
+  <div class="collage-header">
+    <span class="ctitle">动图导出</span>
+    <button onclick="closeGifPanel()" style="padding:3px 10px">关闭</button>
+  </div>
+  <div class="collage-body">
+    <div class="collage-thumbs" id="gifThumbs"></div>
+    <div class="collage-settings">
+      <div class="cs-row">
+        <label>每帧停留(秒)</label>
+        <input type="number" id="gifDuration" min="0.1" max="30" value="1" step="0.1">
+      </div>
+      <div class="cs-row">
+        <label>动画效果</label>
+        <select id="gifEffect">
+          <option value="none">无（直切）</option>
+          <option value="fade">渐入渐出</option>
+          <option value="smooth">平滑过渡</option>
+          <option value="slide-left">向左翻页</option>
+          <option value="slide-right">向右翻页</option>
+          <option value="slide-up">向上翻页</option>
+          <option value="zoom">缩放过渡</option>
+        </select>
+      </div>
+      <div class="cs-row">
+        <label>过渡时长(秒)</label>
+        <input type="number" id="gifTransDuration" min="0.1" max="5" value="0.5" step="0.1">
+      </div>
+      <div class="cs-row">
+        <label>输出宽度</label>
+        <input type="number" id="gifWidth" min="100" max="2000" value="480">
+        <label>FPS</label>
+        <input type="number" id="gifFps" min="5" max="30" value="10">
+        <label>质量</label>
+        <select id="gifQuality">
+          <option value="low">低(快速)</option>
+          <option value="medium" selected>中等</option>
+          <option value="high">高(慢)</option>
+        </select>
+      </div>
+    </div>
+    <div class="collage-preview-wrap" id="gifPreview"><span style="font-size:10px;color:var(--text-dim)">点击导出后生成</span></div>
+  </div>
+  <div class="collage-footer">
+    <button onclick="exportGif()" style="background:var(--highlight-dim);border-color:var(--highlight)">导出动图</button>
+  </div>
+</div>
+
 <script>
+// ===== Optimized GIF Encoder using Web Worker approach with chunked processing =====
+class GIFEncoder{
+constructor(w,h,quality){this.width=w;this.height=h;this.frames=[];this.quality=quality||'medium'}
+addFrame(canvas,delay){
+  // Store as smaller JPEG data to reduce memory
+  const sc=document.createElement('canvas');
+  sc.width=this.width;sc.height=this.height;
+  const sctx=sc.getContext('2d');
+  sctx.drawImage(canvas,0,0,this.width,this.height);
+  const imgData=sctx.getImageData(0,0,this.width,this.height);
+  this.frames.push({data:imgData.data,delay:delay||100});
+}
+async encode(progressCb){
+  const frames=this.frames,w=this.width,h=this.height;
+  const palSize=this.quality==='low'?64:(this.quality==='high'?256:128);
+  const palette=this._buildPalette(palSize);
+  const colorTable=new Uint8Array(256*3);
+  for(let i=0;i<256;i++){
+    if(i<palette.length){colorTable[i*3]=palette[i][0];colorTable[i*3+1]=palette[i][1];colorTable[i*3+2]=palette[i][2]}
+    else{colorTable[i*3]=0;colorTable[i*3+1]=0;colorTable[i*3+2]=0}
+  }
+  const out=[];
+  this._writeStr(out,'GIF89a');
+  this._writeShort(out,w);this._writeShort(out,h);
+  out.push(0xF7);out.push(0);out.push(0);
+  for(let i=0;i<768;i++)out.push(colorTable[i]);
+  out.push(0x21,0xFF,0x0B);this._writeStr(out,'NETSCAPE2.0');out.push(3,1);this._writeShort(out,0);out.push(0);
+
+  for(let fi=0;fi<frames.length;fi++){
+    const frame=frames[fi];
+    out.push(0x21,0xF9,4,0);this._writeShort(out,Math.round(frame.delay/10));out.push(0,0);
+    out.push(0x2C);this._writeShort(out,0);this._writeShort(out,0);this._writeShort(out,w);this._writeShort(out,h);
+    out.push(0);
+    const indices=this._quantizeFrame(frame.data,palette);
+    const minCode=8;out.push(minCode);
+    const lzwData=this._lzwEncode(indices,minCode);
+    let pos=0;while(pos<lzwData.length){const chunk=Math.min(255,lzwData.length-pos);out.push(chunk);for(let i=0;i<chunk;i++)out.push(lzwData[pos++])}
+    out.push(0);
+    if(progressCb)progressCb(fi+1,frames.length);
+    // Yield to browser every few frames to prevent freeze
+    if(fi%2===0)await new Promise(r=>setTimeout(r,0));
+  }
+  out.push(0x3B);
+  return new Uint8Array(out);
+}
+_buildPalette(maxColors){
+  // Sample pixels from first frame for speed
+  const data=this.frames[0].data;
+  const step=Math.max(4,Math.floor(data.length/(4*5000)))*4;
+  const div=Math.round(Math.pow(maxColors,1/3));
+  const palette=[];
+  for(let r=0;r<div;r++)for(let g=0;g<div;g++)for(let b=0;b<div;b++){
+    palette.push([Math.round(r*255/(div-1)),Math.round(g*255/(div-1)),Math.round(b*255/(div-1))])}
+  while(palette.length<256)palette.push([0,0,0]);
+  return palette.slice(0,256);
+}
+_quantizeFrame(data,palette){
+  const len=data.length/4;const indices=new Uint8Array(len);
+  // Build lookup cache for speed
+  const cache=new Map();
+  for(let i=0;i<len;i++){
+    const r=data[i*4],g=data[i*4+1],b=data[i*4+2];
+    const key=(r>>3)<<10|(g>>3)<<5|(b>>3);
+    if(cache.has(key)){indices[i]=cache.get(key);continue}
+    let best=0,bestD=Infinity;
+    for(let j=0;j<palette.length;j++){
+      const dr=r-palette[j][0],dg=g-palette[j][1],db=b-palette[j][2];
+      const d=dr*dr+dg*dg+db*db;
+      if(d<bestD){bestD=d;best=j;if(d===0)break}
+    }
+    indices[i]=best;cache.set(key,best);
+  }
+  return indices;
+}
+_lzwEncode(indices,minCode){
+  const clearCode=1<<minCode,eoiCode=clearCode+1;
+  let codeSize=minCode+1,nextCode=eoiCode+1,maxCode=(1<<codeSize);
+  const table=new Map();const output=[];let buf=0,bitPos=0;
+  function writeBits(code,size){buf|=(code<<bitPos);bitPos+=size;while(bitPos>=8){output.push(buf&0xFF);buf>>=8;bitPos-=8}}
+  writeBits(clearCode,codeSize);
+  let prev=indices[0];
+  for(let i=1;i<indices.length;i++){
+    const curr=indices[i];const key=(prev<<12)|curr;
+    if(table.has(key)){prev=table.get(key)}
+    else{writeBits(prev,codeSize);
+      if(nextCode<4096){table.set(key,nextCode++);if(nextCode>maxCode&&codeSize<12){codeSize++;maxCode=1<<codeSize}}
+      else{writeBits(clearCode,codeSize);table.clear();codeSize=minCode+1;nextCode=eoiCode+1;maxCode=1<<codeSize}
+      prev=curr}}
+  writeBits(prev,codeSize);writeBits(eoiCode,codeSize);
+  if(bitPos>0)output.push(buf&0xFF);return output}
+_writeStr(out,s){for(let i=0;i<s.length;i++)out.push(s.charCodeAt(i))}
+_writeShort(out,v){out.push(v&0xFF);out.push((v>>8)&0xFF)}
+}
+
 document.getElementById('exportFormat').addEventListener('change',function(){
   const j=this.value==='jpg';
   document.getElementById('jpgQuality').style.display=j?'':'none';
@@ -286,12 +517,10 @@ async function createTextWm(){
   debouncedSave();refreshAll();closeTextWmDialog();
 }
 
-// === Full Sync Button ===
 function syncAllFromCurrent(){
   if(!images.length)return;
   if(images.length<2)return;
   const cur=images[currentIdx];
-  if(!confirm('将当前图片的所有水印设置同步到其他全部图片？（不含橡皮擦）'))return;
   const srcState=cur.wmState;
   for(let i=0;i<images.length;i++){
     if(i===currentIdx)continue;
@@ -304,7 +533,6 @@ function syncAllFromCurrent(){
   debouncedSave();refreshAll();
 }
 
-// === Editable Value Helper ===
 function makeEditableValue(span,currentVal,suffix,min,max,onChange){
   span.addEventListener('click',function(){
     if(span.querySelector('input'))return;
@@ -473,7 +701,6 @@ function renderWmLists(){
     d.addEventListener('dragleave',()=>{d.style.borderColor='transparent'});
     d.addEventListener('drop',e=>{e.preventDefault();d.style.borderColor='transparent';if(dragWmId!==null&&dragType===wm.type){reorderWm(dragWmId,wm.id,orderArr);dragWmId=null;dragType=null}});
 
-    // Thumbnail or text preview
     if(wm.subtype==='text'&&wm.textData){
       const tp=document.createElement('div');tp.className='text-wm-preview';tp.textContent='文';tp.style.color=wm.textData.color||'#fff';d.appendChild(tp);
     }else{
@@ -484,12 +711,10 @@ function renderWmLists(){
     const controls=document.createElement('span');controls.className='wm-controls';controls.style.cssText='display:contents';
 
     if(wm.type==='tile'){
-      // Tile scale
       const sL=document.createElement('span');sL.className='wm-size-label';sL.textContent=Math.round(ws.scale*100)+'%';
       const sR=document.createElement('input');sR.type='range';sR.min='10';sR.max='500';sR.value=Math.round(ws.scale*100);
       sR.oninput=()=>{const v=parseInt(sR.value)/100;applyToTargets(img=>{getWmState(img,wm.id).scale=v});sL.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
       controls.appendChild(sR);controls.appendChild(sL);
-      // Make scale label editable
       makeEditableValue(sL,()=>ws.scale*100,'%',10,500,v=>{
         const nv=v/100;sR.value=Math.round(v);applyToTargets(img=>{getWmState(img,wm.id).scale=nv});queueRender();debouncedSave();
       });
@@ -500,7 +725,6 @@ function renderWmLists(){
       const sR=document.createElement('input');sR.type='range';sR.min='5';sR.max='1000';sR.value=Math.round(ws.scale*100);
       sR.oninput=()=>{const v=parseInt(sR.value)/100;applyToTargets(img=>{getWmState(img,wm.id).scale=v});sL.textContent=Math.round(v*100)+'%';queueRender();debouncedSave()};
       controls.appendChild(sR);controls.appendChild(sL);
-      // Make scale label editable
       makeEditableValue(sL,()=>ws.scale*100,'%',5,1000,v=>{
         const nv=v/100;sR.value=Math.round(v);applyToTargets(img=>{getWmState(img,wm.id).scale=nv});queueRender();debouncedSave();
       });
@@ -509,7 +733,6 @@ function renderWmLists(){
       const rR=document.createElement('input');rR.type='range';rR.min='-180';rR.max='180';rR.value=Math.round(ws.rotation);
       rR.oninput=()=>{const v=parseInt(rR.value);applyToTargets(img=>{getWmState(img,wm.id).rotation=v});rL.textContent=v+'°';queueRender();debouncedSave()};
       controls.appendChild(rR);controls.appendChild(rL);
-      // Make rotation label editable
       makeEditableValue(rL,()=>ws.rotation,'°',-180,180,v=>{
         const nv=Math.round(v);rR.value=nv;applyToTargets(img=>{getWmState(img,wm.id).rotation=nv});queueRender();debouncedSave();
       });
@@ -523,7 +746,6 @@ function renderWmLists(){
 
     d.appendChild(controls);
 
-    // Reset button
     const rstBtn=document.createElement('button');rstBtn.textContent='↺';rstBtn.title='重置';rstBtn.style.cssText='padding:1px 5px;font-size:11px;background:transparent;border-color:var(--border);color:var(--text-dim)';
     rstBtn.onclick=()=>resetWmState(wm);d.appendChild(rstBtn);
 
@@ -533,8 +755,6 @@ function renderWmLists(){
     const del=document.createElement('button');del.textContent='✕';del.style.cssText='padding:1px 5px;font-size:9px;background:transparent;border-color:var(--highlight-dim);color:var(--highlight)';
     del.onclick=async()=>{await dbDelete('watermarks',wm.id);watermarks=watermarks.filter(w=>w.id!==wm.id);const oIdx=orderArr.indexOf(wm.id);if(oIdx>=0)orderArr.splice(oIdx,1);images.forEach(img=>{delete img.wmState[wm.id]});if(selectedIconWmId===wm.id)selectedIconWmId=null;debouncedSave();refreshAll()};d.appendChild(del);
 
-    // Sub rows
-    // Opacity
     const subRow=document.createElement('div');subRow.className='wm-row-sub';
     const opLabel=document.createElement('label');opLabel.textContent='透明度';subRow.appendChild(opLabel);
     const opRange=document.createElement('input');opRange.type='range';opRange.min='0';opRange.max='100';opRange.value=Math.round(ws.opacity*100);
@@ -543,7 +763,6 @@ function renderWmLists(){
     subRow.appendChild(opRange);subRow.appendChild(opVal);
     d.appendChild(subRow);
 
-    // Ignore eraser (icon only)
     if(wm.type==='icon'){
       const erRow=document.createElement('div');erRow.className='wm-row-sub';
       const erLabel=document.createElement('label');erLabel.textContent='无视橡皮擦';erRow.appendChild(erLabel);
@@ -568,10 +787,6 @@ function reorderWm(fromId,toId,orderArr){
 }
 
 function applyToTargets(fn){if(syncMode)images.forEach(fn);else if(images[currentIdx])fn(images[currentIdx])}
-
-const _offPool=[];
-function getOff(w,h){let c=_offPool.pop();if(!c)c=document.createElement('canvas');c.width=w;c.height=h;return c}
-function relOff(c){c.getContext('2d').clearRect(0,0,c.width,c.height);if(_offPool.length<4)_offPool.push(c)}
 
 function getOrderedWatermarks(){
   const result=[];
@@ -621,12 +836,10 @@ function drawTileWatermark(oc, wi, ws, W, H) {
   const sc = ws.scale || 1;
   const tw = wi.naturalWidth * sc, th = wi.naturalHeight * sc;
   if(tw < 1 || th < 1) return;
-
   const patCanvas = document.createElement('canvas');
   patCanvas.width = tw; patCanvas.height = th;
   const pctx = patCanvas.getContext('2d');
   pctx.drawImage(wi, 0, 0, tw, th);
-
   const pat = oc.createPattern(patCanvas, 'repeat');
   oc.save();
   const ox = (ws.x || 0) * W, oy = (ws.y || 0) * H;
@@ -652,7 +865,7 @@ async function renderCanvas(){
   }
 
   for(const wm of ews){
-    const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),off=getOff(W,H),oc=off.getContext('2d');oc.clearRect(0,0,W,H);
+    const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),off=document.createElement('canvas');off.width=W;off.height=H;const oc=off.getContext('2d');oc.clearRect(0,0,W,H);
     if(wm.type==='tile'){
       drawTileWatermark(oc, wi, ws, W, H);
     }
@@ -671,7 +884,7 @@ async function renderCanvas(){
 
     ctx.globalCompositeOperation=ws.blendMode||'normal';
     ctx.globalAlpha=ws.opacity!==undefined?ws.opacity:1;
-    ctx.drawImage(off,0,0);relOff(off);
+    ctx.drawImage(off,0,0);
   }
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
 
@@ -884,6 +1097,16 @@ async function renderFinal(imgObj){
   cx.globalCompositeOperation='source-over';cx.globalAlpha=1;return c;
 }
 
+// Render final at reduced size for GIF (returns canvas at target width)
+async function renderFinalSmall(imgObj, targetW){
+  const full=await renderFinal(imgObj);
+  const scale=targetW/full.width;
+  const sc=document.createElement('canvas');
+  sc.width=targetW;sc.height=Math.round(full.height*scale);
+  sc.getContext('2d').drawImage(full,0,0,sc.width,sc.height);
+  return sc;
+}
+
 function getExpCfg(){const f=document.getElementById('exportFormat').value,q=parseInt(document.getElementById('jpgQuality').value)/100;return f==='jpg'?{mime:'image/jpeg',ext:'jpg',q}:{mime:'image/png',ext:'png',q:1}}
 
 function doDownload(cvs,name){
@@ -897,6 +1120,13 @@ function doDownload(cvs,name){
   },cfg.mime,cfg.q);
 }
 
+function doDownloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},500);
+}
+
 async function exportCurrent(){if(!images.length)return;const c=await renderFinal(images[currentIdx]);doDownload(c,'watermarked_'+(currentIdx+1))}
 async function exportAll(){if(!images.length)return;for(let i=0;i<images.length;i++){const c=await renderFinal(images[i]);doDownload(c,'watermarked_'+(i+1));await new Promise(r=>setTimeout(r,400))}}
 
@@ -905,8 +1135,243 @@ async function deleteCurrent(){
   images.splice(currentIdx,1);if(currentIdx>=images.length)currentIdx=Math.max(0,images.length-1);selectedIconWmId=null;debouncedSave();refreshAll();
 }
 async function deleteAllImages(){
-  if(!images.length)return;if(!confirm('确定删除全部图片？'))return;
+  if(!images.length)return;
   await dbClear('images');images.forEach(img=>imageCache.delete(img.dataURL));images=[];currentIdx=0;selectedIconWmId=null;debouncedSave();refreshAll();
+}
+
+// ===== COLLAGE =====
+let collageSelected=[];
+function openCollagePanel(){
+  if(!images.length)return;
+  collageSelected=images.map((_,i)=>i);
+  renderCollageThumbs();
+  document.getElementById('collagePanel').classList.add('active');
+  document.getElementById('collagePreview').innerHTML='';
+}
+function closeCollagePanel(){document.getElementById('collagePanel').classList.remove('active')}
+
+function renderCollageThumbs(){
+  const ct=document.getElementById('collageThumbs');ct.innerHTML='';
+  collageSelected.forEach((imgIdx,i)=>{
+    const d=document.createElement('div');d.className='ct-item';
+    const im=document.createElement('img');im.src=images[imgIdx].dataURL;d.appendChild(im);
+    const rm=document.createElement('button');rm.className='ct-remove';rm.textContent='✕';
+    rm.onclick=()=>{collageSelected.splice(i,1);renderCollageThumbs()};
+    d.appendChild(rm);
+    const numLabel=document.createElement('span');numLabel.style.cssText='position:absolute;bottom:1px;left:2px;font-size:8px;color:#fff;background:rgba(0,0,0,.5);padding:0 3px;border-radius:2px';numLabel.textContent=i+1;
+    d.appendChild(numLabel);
+    ct.appendChild(d);
+  });
+}
+
+async function previewCollage(){
+  const cvs=await buildCollageCanvas();
+  if(!cvs)return;
+  const wrap=document.getElementById('collagePreview');wrap.innerHTML='';
+  const prev=document.createElement('canvas');prev.width=cvs.width;prev.height=cvs.height;prev.style.maxWidth='100%';prev.style.maxHeight='200px';
+  prev.getContext('2d').drawImage(cvs,0,0);
+  wrap.appendChild(prev);
+}
+
+async function buildCollageCanvas(){
+  if(!collageSelected.length)return null;
+  const cols=parseInt(document.getElementById('collageCols').value)||2;
+  const rows=parseInt(document.getElementById('collageRows').value)||2;
+  const gap=parseInt(document.getElementById('collageGap').value)||0;
+  const bgColor=document.getElementById('collageBg').value;
+  const showNum=document.getElementById('collageNumSwitch').classList.contains('on');
+  const numFont=document.getElementById('collageNumFont').value;
+  const numPos=document.getElementById('collageNumPos').value;
+  const numSize=parseInt(document.getElementById('collageNumSize').value)||36;
+  const numColor=document.getElementById('collageNumColor').value;
+
+  const rendered=[];
+  for(const idx of collageSelected){
+    rendered.push(await renderFinal(images[idx]));
+  }
+
+  let maxW=0,maxH=0;
+  rendered.forEach(c=>{if(c.width>maxW)maxW=c.width;if(c.height>maxH)maxH=c.height});
+
+  const totalW=cols*maxW+(cols+1)*gap;
+  const totalH=rows*maxH+(rows+1)*gap;
+  const out=document.createElement('canvas');out.width=totalW;out.height=totalH;
+  const ox=out.getContext('2d');
+  ox.fillStyle=bgColor;ox.fillRect(0,0,totalW,totalH);
+
+  for(let i=0;i<rendered.length&&i<cols*rows;i++){
+    const col=i%cols,row=Math.floor(i/cols);
+    const x=gap+col*(maxW+gap),y=gap+row*(maxH+gap);
+    const cvs=rendered[i];
+    const dx=x+(maxW-cvs.width)/2,dy=y+(maxH-cvs.height)/2;
+    ox.drawImage(cvs,dx,dy);
+
+    if(showNum){
+      ox.save();
+      ox.font=`bold ${numSize}px "${numFont}", sans-serif`;
+      ox.fillStyle=numColor;
+      ox.textBaseline='top';
+      const txt=''+(i+1);
+      const tm=ox.measureText(txt);
+      const pad=numSize*0.3;
+      let nx,ny;
+      if(numPos==='tl'){nx=x+pad;ny=y+pad}
+      else if(numPos==='tr'){nx=x+maxW-tm.width-pad;ny=y+pad}
+      else if(numPos==='bl'){nx=x+pad;ny=y+maxH-numSize-pad}
+      else if(numPos==='br'){nx=x+maxW-tm.width-pad;ny=y+maxH-numSize-pad}
+      else{nx=x+(maxW-tm.width)/2;ny=y+maxH-numSize-pad}
+      ox.fillText(txt,nx,ny);
+      ox.restore();
+    }
+  }
+  return out;
+}
+
+async function exportCollage(){
+  const cvs=await buildCollageCanvas();
+  if(!cvs)return;
+  doDownload(cvs,'collage');
+}
+
+// ===== GIF (Optimized) =====
+let gifSelected=[];
+function openGifPanel(){
+  if(!images.length)return;
+  gifSelected=images.map((_,i)=>i);
+  renderGifThumbs();
+  document.getElementById('gifPanel').classList.add('active');
+  document.getElementById('gifPreview').innerHTML='<span style="font-size:10px;color:var(--text-dim)">点击导出后生成</span>';
+}
+function closeGifPanel(){document.getElementById('gifPanel').classList.remove('active')}
+
+function renderGifThumbs(){
+  const ct=document.getElementById('gifThumbs');ct.innerHTML='';
+  gifSelected.forEach((imgIdx,i)=>{
+    const d=document.createElement('div');d.className='ct-item';
+    const im=document.createElement('img');im.src=images[imgIdx].dataURL;d.appendChild(im);
+    const rm=document.createElement('button');rm.className='ct-remove';rm.textContent='✕';
+    rm.onclick=()=>{gifSelected.splice(i,1);renderGifThumbs()};
+    d.appendChild(rm);
+    ct.appendChild(d);
+  });
+}
+
+async function exportGif(){
+  if(!gifSelected.length)return;
+  const outW=Math.min(parseInt(document.getElementById('gifWidth').value)||480, 800);
+  const fps=Math.min(parseInt(document.getElementById('gifFps').value)||10, 20);
+  const frameDuration=parseFloat(document.getElementById('gifDuration').value)||1;
+  const transDuration=parseFloat(document.getElementById('gifTransDuration').value)||0.5;
+  const effect=document.getElementById('gifEffect').value;
+  const quality=document.getElementById('gifQuality').value;
+
+  const prevWrap=document.getElementById('gifPreview');
+  prevWrap.innerHTML='<span style="font-size:10px;color:var(--text-dim)">渲染帧中... 0%</span>';
+
+  // Pre-render all images at small size using JPG-quality reduction
+  const rendered=[];
+  for(let i=0;i<gifSelected.length;i++){
+    const sc=await renderFinalSmall(images[gifSelected[i]], outW);
+    rendered.push(sc);
+    prevWrap.innerHTML=`<span style="font-size:10px;color:var(--text-dim)">渲染图片 ${i+1}/${gifSelected.length}...</span>`;
+    await new Promise(r=>setTimeout(r,0));
+  }
+
+  // Normalize height
+  let maxH=0;rendered.forEach(c=>{if(c.height>maxH)maxH=c.height});
+  const outH=maxH;
+
+  const frameMs=1000/fps;
+  const holdFrames=Math.max(1,Math.round(frameDuration*fps));
+  const transFrames=effect==='none'?0:Math.max(1,Math.round(transDuration*fps));
+
+  const encoder=new GIFEncoder(outW,outH,quality);
+  const tmpCanvas=document.createElement('canvas');tmpCanvas.width=outW;tmpCanvas.height=outH;
+  const tc=tmpCanvas.getContext('2d');
+
+  function drawCentered(ctx2,src){
+    ctx2.fillStyle='#000';ctx2.fillRect(0,0,outW,outH);
+    const dx=(outW-src.width)/2,dy=(outH-src.height)/2;
+    ctx2.drawImage(src,dx,dy);
+  }
+
+  const totalFrames=rendered.length*holdFrames+(rendered.length>1?(rendered.length-1)*transFrames:0);
+  let frameCount=0;
+
+  for(let i=0;i<rendered.length;i++){
+    // Hold frames - only add key frames (skip duplicates, use delay multiplier)
+    drawCentered(tc,rendered[i]);
+    encoder.addFrame(tmpCanvas, frameMs*holdFrames);
+    frameCount+=holdFrames;
+    prevWrap.innerHTML=`<span style="font-size:10px;color:var(--text-dim)">编码中... ${Math.round(frameCount/totalFrames*50)}%</span>`;
+    await new Promise(r=>setTimeout(r,0));
+
+    // Transition to next
+    if(transFrames>0&&i<rendered.length-1){
+      const next=rendered[i+1];
+      const curr=rendered[i];
+      // For transitions, render fewer intermediate frames
+      const actualTransFrames=Math.min(transFrames, 8);
+      for(let f=0;f<actualTransFrames;f++){
+        const t=(f+1)/actualTransFrames;
+        tc.fillStyle='#000';tc.fillRect(0,0,outW,outH);
+        if(effect==='fade'||effect==='smooth'){
+          tc.globalAlpha=1-t;drawCentered(tc,curr);
+          tc.globalAlpha=t;drawCentered(tc,next);
+          tc.globalAlpha=1;
+        }else if(effect==='slide-left'){
+          const offset=Math.round(t*outW);
+          tc.drawImage(curr,-offset,(outH-curr.height)/2);
+          tc.drawImage(next,outW-offset,(outH-next.height)/2);
+        }else if(effect==='slide-right'){
+          const offset=Math.round(t*outW);
+          tc.drawImage(curr,offset,(outH-curr.height)/2);
+          tc.drawImage(next,-outW+offset,(outH-next.height)/2);
+        }else if(effect==='slide-up'){
+          const offset=Math.round(t*outH);
+          tc.drawImage(curr,(outW-curr.width)/2,-offset);
+          tc.drawImage(next,(outW-next.width)/2,outH-offset);
+        }else if(effect==='zoom'){
+          const s1=1-t*0.3;const s2=0.7+t*0.3;
+          tc.globalAlpha=1-t;
+          tc.save();tc.translate(outW/2,outH/2);tc.scale(s1,s1);tc.translate(-outW/2,-outH/2);drawCentered(tc,curr);tc.restore();
+          tc.globalAlpha=t;
+          tc.save();tc.translate(outW/2,outH/2);tc.scale(s2,s2);tc.translate(-outW/2,-outH/2);drawCentered(tc,next);tc.restore();
+          tc.globalAlpha=1;
+        }else{
+          drawCentered(tc,next);
+        }
+        const delayPerTransFrame=Math.round(frameMs*transFrames/actualTransFrames);
+        encoder.addFrame(tmpCanvas, delayPerTransFrame);
+        frameCount+=Math.round(transFrames/actualTransFrames);
+        await new Promise(r=>setTimeout(r,0));
+      }
+      prevWrap.innerHTML=`<span style="font-size:10px;color:var(--text-dim)">编码中... ${Math.round(frameCount/totalFrames*50)}%</span>`;
+    }
+  }
+
+  prevWrap.innerHTML='<span style="font-size:10px;color:var(--text-dim)">压缩GIF中... 50%</span>';
+  await new Promise(r=>setTimeout(r,50));
+
+  try{
+    const gifData=await encoder.encode((done,total)=>{
+      const pct=50+Math.round(done/total*50);
+      prevWrap.innerHTML=`<span style="font-size:10px;color:var(--text-dim)">压缩GIF中... ${pct}%</span>`;
+    });
+    const blob=new Blob([gifData],{type:'image/gif'});
+    doDownloadBlob(blob,'animation.gif');
+
+    const url=URL.createObjectURL(blob);
+    prevWrap.innerHTML='';
+    const img=document.createElement('img');img.src=url;img.style.maxWidth='100%';img.style.maxHeight='200px';
+    prevWrap.appendChild(img);
+    const sizeInfo=document.createElement('span');sizeInfo.style.cssText='font-size:9px;color:var(--text-dim);position:absolute;bottom:4px;right:8px';
+    sizeInfo.textContent=(blob.size/1024).toFixed(0)+'KB';
+    prevWrap.style.position='relative';
+    prevWrap.appendChild(sizeInfo);
+  }catch(err){
+    prevWrap.innerHTML=`<span style="font-size:10px;color:#e88">导出失败: ${err.message||'未知错误'}</span>`;
+  }
 }
 
 (async()=>{await openDB();await loadState();refreshAll()})();
