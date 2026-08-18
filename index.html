@@ -145,7 +145,7 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 .wm-item .wm-del-btn{display:none;padding:1px 5px;font-size:9px;background:transparent;border-color:var(--highlight-dim);color:var(--highlight)}
 .wm-item.edit-visible .wm-del-btn{display:inline-flex}
 
-.preset-bar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;z-index:59;overflow-x:auto}
+.preset-bar{display:flex;align-items:center;gap:6px;padding:5px 10px;padding-right:80px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;z-index:59;overflow-x:auto;position:relative}
 .preset-bar::-webkit-scrollbar{height:3px}
 .preset-bar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .preset-item{display:flex;align-items:center;gap:3px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:10px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:border-color .15s,background .15s}
@@ -155,9 +155,22 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 .preset-bar.edit-mode .preset-item .preset-del{display:inline}
 .preset-item .preset-name{cursor:pointer}
 .preset-bar.edit-mode .preset-item .preset-name{border-bottom:1px dashed var(--text-dim)}
+.preset-fixed-btns{position:fixed;right:6px;display:flex;align-items:center;gap:4px;z-index:61;background:var(--card);padding:3px 6px;border-radius:var(--radius);border:1px solid var(--border)}
 .preset-add-btn{padding:3px 8px;font-size:12px;background:transparent;border-color:var(--border);color:var(--highlight);flex-shrink:0}
 .preset-edit-btn{padding:3px 8px;font-size:10px;background:transparent;border-color:var(--border);color:var(--text-dim);flex-shrink:0}
 .preset-edit-btn.active{background:var(--highlight-dim);border-color:var(--highlight);color:#fff}
+.preset-item .preset-switch-alt{display:none;margin-left:3px;font-size:9px;color:var(--highlight);cursor:pointer;padding:0 3px;border:1px solid var(--border);border-radius:3px;background:transparent}
+.preset-item .preset-switch-alt:hover{background:var(--accent);border-color:var(--highlight-dim)}
+.preset-item.has-alt .preset-switch-alt{display:inline}
+
+.parallel-layer-section{display:flex;align-items:center;gap:4px;padding-left:29px;margin-top:2px;flex-wrap:wrap}
+.parallel-add-btn{padding:1px 6px;font-size:11px;background:transparent;border-color:var(--highlight-dim);color:var(--highlight);cursor:pointer;border-radius:3px}
+.parallel-add-btn:hover{background:var(--accent)}
+.parallel-tag{display:flex;align-items:center;gap:2px;padding:1px 6px;background:var(--bg);border:1px solid var(--border);border-radius:3px;font-size:9px;color:var(--text-dim);cursor:pointer;transition:border-color .15s}
+.parallel-tag:hover{border-color:var(--highlight-dim)}
+.parallel-tag.active{border-color:var(--highlight);color:var(--highlight)}
+.parallel-tag .ptag-del{font-size:8px;color:#e88;cursor:pointer;margin-left:2px;display:none}
+.wm-item.edit-visible .parallel-tag .ptag-del{display:inline}
 
 </style>
 </head>
@@ -213,8 +226,10 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 <div class="preset-bar" id="presetBar">
   <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;font-weight:600">预设</span>
   <div id="presetList" style="display:contents"></div>
-  <button class="preset-add-btn" onclick="addPreset()" title="保存当前设置为预设">＋</button>
-  <button class="preset-edit-btn" id="presetEditBtn" onclick="togglePresetEdit()" title="编辑预设">编辑</button>
+  <div class="preset-fixed-btns" id="presetFixedBtns">
+    <button class="preset-add-btn" onclick="addPreset()" title="保存当前设置为预设">＋</button>
+    <button class="preset-edit-btn" id="presetEditBtn" onclick="togglePresetEdit()" title="编辑预设">编辑</button>
+  </div>
 </div>
 
 <div class="bottom-panel" id="bottomPanel">
@@ -743,29 +758,61 @@ function addPreset(){
   if(!images.length)return;
   const cur=images[currentIdx];
   const wmSnapshot={};
+  // Record which wm ids exist at save time
+  const savedWmIds=[];
   watermarks.forEach(wm=>{
     const ws=getWmState(cur,wm.id);
     wmSnapshot[wm.id]=JSON.parse(JSON.stringify(ws));
+    savedWmIds.push(wm.id);
+  });
+  // Also snapshot parallel layer active selections for icon watermarks
+  const parallelSnapshot={};
+  watermarks.forEach(wm=>{
+    if(wm.type==='icon'&&wm.parallelLayers&&wm.parallelLayers.length>0){
+      const activeIdx=wm.activeParallelIdx||0;
+      parallelSnapshot[wm.id]={activeIdx,layerCount:wm.parallelLayers.length};
+    }
   });
   const exportFmt=document.getElementById('exportFormat').value;
   const jpgQ=parseInt(document.getElementById('jpgQuality').value);
   const name='预设'+(presets.length+1);
-  presets.push({name,wmState:wmSnapshot,exportFormat:exportFmt,jpgQuality:jpgQ});
+  presets.push({name,wmState:wmSnapshot,exportFormat:exportFmt,jpgQuality:jpgQ,savedWmIds,parallelSnapshot});
   savePresets();renderPresets();
 }
 
 function applyPreset(idx){
   const p=presets[idx];if(!p)return;
-  // Apply wmState to all images
   images.forEach(img=>{
+    // Apply saved wm states
     for(const wmId in p.wmState){
       const numId=parseInt(wmId);
       if(watermarks.find(w=>w.id===numId)){
-        // Preserve erasers, only sync wm settings
         img.wmState[numId]=JSON.parse(JSON.stringify(p.wmState[wmId]));
       }
     }
+    // For watermarks that didn't exist when preset was saved, default to disabled
+    watermarks.forEach(wm=>{
+      if(p.savedWmIds&&!p.savedWmIds.includes(wm.id)){
+        const def=getDefaultState(wm);
+        def.enabled=false;
+        img.wmState[wm.id]={...def};
+      }
+    });
   });
+  // Apply parallel layer selections
+  if(p.parallelSnapshot){
+    for(const wmId in p.parallelSnapshot){
+      const numId=parseInt(wmId);
+      const wm=watermarks.find(w=>w.id===numId);
+      if(wm&&wm.parallelLayers){
+        const snap=p.parallelSnapshot[wmId];
+        const targetIdx=snap.activeIdx||0;
+        if(targetIdx<(wm.parallelLayers.length+1)){
+          switchParallelLayer(wm,targetIdx);
+        }
+      }
+    }
+  }
   // Apply export settings
   document.getElementById('exportFormat').value=p.exportFormat||'png';
   const isJpg=p.exportFormat==='jpg';
@@ -773,6 +820,23 @@ function applyPreset(idx){
   document.getElementById('jpgQualityVal').style.display=isJpg?'':'none';
   if(p.jpgQuality){document.getElementById('jpgQuality').value=p.jpgQuality;document.getElementById('jpgQualityVal').textContent=p.jpgQuality+'%'}
   debouncedSave();refreshAll();
+}
+
+function cyclePresetParallel(idx){
+  const p=presets[idx];if(!p||!p.parallelSnapshot)return;
+  // Find icon watermarks that have parallel layers in this preset
+  let cycled=false;
+  for(const wmId in p.parallelSnapshot){
+    const numId=parseInt(wmId);
+    const wm=watermarks.find(w=>w.id===numId);
+    if(!wm||!wm.parallelLayers||wm.parallelLayers.length===0)continue;
+    const totalLayers=wm.parallelLayers.length+1; // +1 for base layer
+    const curIdx=wm.activeParallelIdx||0;
+    const nextIdx=(curIdx+1)%totalLayers;
+    switchParallelLayer(wm,nextIdx);
+    cycled=true;
+  }
+  if(cycled){debouncedSave();refreshAll()}
 }
 
 function deletePreset(idx){
@@ -792,17 +856,94 @@ function renderPresets(){
   const list=document.getElementById('presetList');list.innerHTML='';
   presets.forEach((p,i)=>{
     const d=document.createElement('div');d.className='preset-item';
+    // Check if this preset has any parallel layers
+    const hasAlt=p.parallelSnapshot&&Object.keys(p.parallelSnapshot).length>0;
+    if(hasAlt)d.classList.add('has-alt');
+
     const nm=document.createElement('span');nm.className='preset-name';nm.textContent=p.name;
     nm.onclick=()=>{
       if(presetEditMode){renamePreset(i,nm)}
       else{applyPreset(i)}
     };
     d.appendChild(nm);
+
+    // Switch parallel layer button (only for presets with parallel layers)
+    const switchBtn=document.createElement('span');switchBtn.className='preset-switch-alt';switchBtn.textContent='⇄';switchBtn.title='切换平行水印';
+    switchBtn.onclick=e=>{e.stopPropagation();cyclePresetParallel(i)};
+    d.appendChild(switchBtn);
+
     const del=document.createElement('span');del.className='preset-del';del.textContent='✕';
     del.onclick=e=>{e.stopPropagation();deletePreset(i)};
     d.appendChild(del);
     list.appendChild(d);
   });
+  // Position fixed buttons relative to preset bar
+  positionPresetFixedBtns();
+}
+
+function positionPresetFixedBtns(){
+  const bar=document.getElementById('presetBar');
+  const btns=document.getElementById('presetFixedBtns');
+  if(!bar||!btns)return;
+  const rect=bar.getBoundingClientRect();
+  btns.style.top=(rect.top+(rect.height-btns.offsetHeight)/2)+'px';
+}
+
+// Reposition on scroll/resize
+window.addEventListener('resize',positionPresetFixedBtns);
+new MutationObserver(positionPresetFixedBtns).observe(document.getElementById('presetBar'),{childList:true,subtree:true});
+
+// ===== Parallel Layers for Icon Watermarks =====
+// Each icon watermark can have parallelLayers: [{dataURL, name}]
+// activeParallelIdx: 0 = base layer, 1+ = parallel layers
+// All parallel layers share the same settings (position, scale, rotation, blend, opacity, etc.)
+
+function addParallelLayer(wm){
+  if(wm.type!=='icon')return;
+  // Create a file input to upload the parallel layer image
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=async()=>{
+    if(!inp.files[0])return;
+    const du=await fileToDataURL(inp.files[0]);
+    if(!wm.parallelLayers)wm.parallelLayers=[];
+    wm.parallelLayers.push({dataURL:du,name:'平行'+(wm.parallelLayers.length+1)});
+    debouncedSave();refreshAll();
+  };
+  inp.click();
+}
+
+function removeParallelLayer(wm,layerIdx){
+  if(!wm.parallelLayers||layerIdx<0||layerIdx>=wm.parallelLayers.length)return;
+  wm.parallelLayers.splice(layerIdx,1);
+  // If active was pointing to removed or beyond, reset to 0
+  if((wm.activeParallelIdx||0)>wm.parallelLayers.length){
+    wm.activeParallelIdx=0;
+  }
+  // If the removed layer was active, switch to base
+  if((wm.activeParallelIdx||0)===layerIdx+1){
+    wm.activeParallelIdx=0;
+  }else if((wm.activeParallelIdx||0)>layerIdx+1){
+    wm.activeParallelIdx=(wm.activeParallelIdx||0)-1;
+  }
+  debouncedSave();refreshAll();
+}
+
+function switchParallelLayer(wm,newIdx){
+  if(wm.type!=='icon')return;
+  const totalLayers=(wm.parallelLayers?wm.parallelLayers.length:0)+1;
+  if(newIdx<0||newIdx>=totalLayers)newIdx=0;
+  wm.activeParallelIdx=newIdx;
+  // Update the effective dataURL
+  // We don't change wm.dataURL; instead, getActiveDataURL returns the right one
+  debouncedSave();
+}
+
+function getActiveDataURL(wm){
+  if(wm.type!=='icon')return wm.dataURL;
+  const idx=wm.activeParallelIdx||0;
+  if(idx===0||!wm.parallelLayers||wm.parallelLayers.length===0)return wm.dataURL;
+  if(idx-1<wm.parallelLayers.length)return wm.parallelLayers[idx-1].dataURL;
+  return wm.dataURL;
 }
 
 let dragWmId=null,dragType=null;
@@ -832,10 +973,12 @@ function renderWmLists(){
     d.addEventListener('dragleave',()=>{d.style.borderColor='transparent'});
     d.addEventListener('drop',e=>{e.preventDefault();d.style.borderColor='transparent';if(dragWmId!==null&&dragType===wm.type){reorderWm(dragWmId,wm.id,orderArr);dragWmId=null;dragType=null}});
 
+    // Use getActiveDataURL for icon watermarks to show the active parallel layer
+    const activeURL=getActiveDataURL(wm);
     if(wm.subtype==='text'&&wm.textData){
       const tp=document.createElement('div');tp.className='text-wm-preview';tp.textContent='文';tp.style.color=wm.textData.color||'#fff';d.appendChild(tp);
     }else{
-      const th=document.createElement('img');th.src=wm.dataURL;d.appendChild(th);
+      const th=document.createElement('img');th.src=activeURL;d.appendChild(th);
     }
     const nm=document.createElement('span');nm.className='wm-name';nm.textContent=wm.name;nm.onclick=()=>{if(!wm.locked)startRename(nm,wm)};d.appendChild(nm);
 
@@ -905,6 +1048,37 @@ function renderWmLists(){
       erSw.onclick=()=>{const nv=!getWmState(cur,wm.id).ignoreEraser;applyToTargets(img=>{getWmState(img,wm.id).ignoreEraser=nv});erSw.classList.toggle('on',nv);debouncedSave();queueRender()};
       erRow.appendChild(erSw);
       d.appendChild(erRow);
+
+      // Parallel layers section (only in edit mode)
+      if(isEditActive){
+        const plSection=document.createElement('div');plSection.className='parallel-layer-section';
+
+        // Base layer tag
+        const baseTag=document.createElement('span');baseTag.className='parallel-tag'+((wm.activeParallelIdx||0)===0?' active':'');
+        baseTag.textContent='基础';
+        baseTag.onclick=()=>{switchParallelLayer(wm,0);debouncedSave();refreshAll()};
+        plSection.appendChild(baseTag);
+
+        // Parallel layer tags
+        if(wm.parallelLayers){
+          wm.parallelLayers.forEach((pl,pi)=>{
+            const tag=document.createElement('span');tag.className='parallel-tag'+((wm.activeParallelIdx||0)===(pi+1)?' active':'');
+            tag.textContent=pl.name||('平行'+(pi+1));
+            tag.onclick=()=>{switchParallelLayer(wm,pi+1);debouncedSave();refreshAll()};
+            const delSpan=document.createElement('span');delSpan.className='ptag-del';delSpan.textContent='✕';
+            delSpan.onclick=e=>{e.stopPropagation();removeParallelLayer(wm,pi)};
+            tag.appendChild(delSpan);
+            plSection.appendChild(tag);
+          });
+        }
+
+        // Add parallel layer button
+        const addBtn=document.createElement('button');addBtn.className='parallel-add-btn';addBtn.textContent='＋';addBtn.title='添加平行图层';
+        addBtn.onclick=()=>addParallelLayer(wm);
+        plSection.appendChild(addBtn);
+
+        d.appendChild(plSection);
+      }
     }
 
     container.appendChild(d);
@@ -1000,7 +1174,7 @@ async function renderCanvas(){
   }
 
   for(const wm of ews){
-    const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),off=document.createElement('canvas');off.width=W;off.height=H;const oc=off.getContext('2d');oc.clearRect(0,0,W,H);
+    const ws=getWmState(cur,wm.id),wi=await loadImage(getActiveDataURL(wm)),off=document.createElement('canvas');off.width=W;off.height=H;const oc=off.getContext('2d');oc.clearRect(0,0,W,H);
     if(wm.type==='tile'){
       drawTileWatermark(oc, wi, ws, W, H);
     }
@@ -1031,7 +1205,7 @@ async function renderCanvas(){
     ctx.setLineDash([]);ctx.restore();
   }
 
-  if(selectedIconWmId!==null){const wm=watermarks.find(w=>w.id===selectedIconWmId);if(wm&&getWmState(cur,wm.id).enabled){const ws=getWmState(cur,wm.id),wi=await loadImage(wm.dataURL),iw=wi.naturalWidth*ws.scale,ih=wi.naturalHeight*ws.scale;ctx.save();ctx.translate(ws.x*W,ws.y*H);ctx.rotate(ws.rotation*Math.PI/180);ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(200,168,126,0.7)';ctx.lineWidth=1.5;ctx.strokeRect(-iw/2,-ih/2,iw,ih);ctx.setLineDash([]);ctx.restore()}}
+  if(selectedIconWmId!==null){const wm=watermarks.find(w=>w.id===selectedIconWmId);if(wm&&getWmState(cur,wm.id).enabled){const ws=getWmState(cur,wm.id),wi=await loadImage(getActiveDataURL(wm)),iw=wi.naturalWidth*ws.scale,ih=wi.naturalHeight*ws.scale;ctx.save();ctx.translate(ws.x*W,ws.y*H);ctx.rotate(ws.rotation*Math.PI/180);ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(200,168,126,0.7)';ctx.lineWidth=1.5;ctx.strokeRect(-iw/2,-ih/2,iw,ih);ctx.setLineDash([]);ctx.restore()}}
 }
 
 let dragState=null,pinchDist0=null,pinchScale0=null,pinchAng0=null,pinchRot0=null;
@@ -1043,7 +1217,7 @@ function inRotRect(px,py,cx,cy,hw,hh,rd){
 }
 
 function iconBounds(wm,cur){
-  const ws=getWmState(cur,wm.id),wi=imageCache.get(wm.dataURL);
+  const ws=getWmState(cur,wm.id),wi=imageCache.get(getActiveDataURL(wm));
   if(!wi)return null;
   const iw=wi.naturalWidth*ws.scale,ih=wi.naturalHeight*ws.scale;
   return{cx:ws.x,cy:ws.y,hw:iw/(2*canvas.width),hh:ih/(2*canvas.height),r:ws.rotation};
@@ -1210,7 +1384,7 @@ async function renderFinal(imgObj){
   }
 
   for(const wm of ews){
-    const ws=getWmState(imgObj,wm.id),wi=await loadImage(wm.dataURL),off=document.createElement('canvas');off.width=W;off.height=H;const oc=off.getContext('2d');
+    const ws=getWmState(imgObj,wm.id),wi=await loadImage(getActiveDataURL(wm)),off=document.createElement('canvas');off.width=W;off.height=H;const oc=off.getContext('2d');
     if(wm.type==='tile'){
       drawTileWatermark(oc, wi, ws, W, H);
     }
@@ -1509,7 +1683,7 @@ async function exportGif(){
   }
 }
 
-(async()=>{await openDB();await loadState();renderPresets();refreshAll()})();
+(async()=>{await openDB();await loadState();renderPresets();refreshAll();setTimeout(positionPresetFixedBtns,100)})();
 </script>
 </body>
 </html>
