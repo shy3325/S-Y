@@ -145,9 +145,12 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 .wm-item .wm-del-btn{display:none;padding:1px 5px;font-size:9px;background:transparent;border-color:var(--highlight-dim);color:var(--highlight)}
 .wm-item.edit-visible .wm-del-btn{display:inline-flex}
 
-.preset-bar{display:flex;align-items:center;gap:6px;padding:5px 10px;padding-right:80px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;z-index:59;overflow-x:auto;position:relative}
+.preset-bar{display:flex;align-items:center;gap:0;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;z-index:59;position:relative;min-height:32px}
 .preset-bar::-webkit-scrollbar{height:3px}
 .preset-bar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.preset-scroll-area{display:flex;align-items:center;gap:6px;padding:5px 10px;flex:1;min-width:0;overflow-x:auto}
+.preset-scroll-area::-webkit-scrollbar{height:3px}
+.preset-scroll-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .preset-item{display:flex;align-items:center;gap:3px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:10px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:border-color .15s,background .15s}
 .preset-item:hover{border-color:var(--highlight-dim)}
 .preset-item.active{border-color:var(--highlight);background:var(--accent)}
@@ -155,7 +158,7 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 .preset-bar.edit-mode .preset-item .preset-del{display:inline}
 .preset-item .preset-name{cursor:pointer}
 .preset-bar.edit-mode .preset-item .preset-name{border-bottom:1px dashed var(--text-dim)}
-.preset-fixed-btns{position:fixed;right:6px;display:flex;align-items:center;gap:4px;z-index:61;background:var(--card);padding:3px 6px;border-radius:var(--radius);border:1px solid var(--border)}
+.preset-fixed-btns{display:flex;align-items:center;gap:4px;padding:3px 8px;background:var(--card);border-left:1px solid var(--border);flex-shrink:0;align-self:stretch}
 .preset-add-btn{padding:3px 8px;font-size:12px;background:transparent;border-color:var(--border);color:var(--highlight);flex-shrink:0}
 .preset-edit-btn{padding:3px 8px;font-size:10px;background:transparent;border-color:var(--border);color:var(--text-dim);flex-shrink:0}
 .preset-edit-btn.active{background:var(--highlight-dim);border-color:var(--highlight);color:#fff}
@@ -224,8 +227,10 @@ input[type="color"]{width:28px;height:22px;padding:1px 2px;cursor:pointer;border
 <button class="nav-btn right" onclick="navImg(1)">›</button>
 
 <div class="preset-bar" id="presetBar">
-  <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;font-weight:600">预设</span>
-  <div id="presetList" style="display:contents"></div>
+  <div class="preset-scroll-area" id="presetScrollArea">
+    <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;font-weight:600">预设</span>
+    <div id="presetList" style="display:contents"></div>
+  </div>
   <div class="preset-fixed-btns" id="presetFixedBtns">
     <button class="preset-add-btn" onclick="addPreset()" title="保存当前设置为预设">＋</button>
     <button class="preset-edit-btn" id="presetEditBtn" onclick="togglePresetEdit()" title="编辑预设">编辑</button>
@@ -877,21 +882,7 @@ function renderPresets(){
     d.appendChild(del);
     list.appendChild(d);
   });
-  // Position fixed buttons relative to preset bar
-  positionPresetFixedBtns();
 }
-
-function positionPresetFixedBtns(){
-  const bar=document.getElementById('presetBar');
-  const btns=document.getElementById('presetFixedBtns');
-  if(!bar||!btns)return;
-  const rect=bar.getBoundingClientRect();
-  btns.style.top=(rect.top+(rect.height-btns.offsetHeight)/2)+'px';
-}
-
-// Reposition on scroll/resize
-window.addEventListener('resize',positionPresetFixedBtns);
-new MutationObserver(positionPresetFixedBtns).observe(document.getElementById('presetBar'),{childList:true,subtree:true});
 
 // ===== Parallel Layers for Icon Watermarks =====
 // Each icon watermark can have parallelLayers: [{dataURL, name}]
@@ -1683,7 +1674,7 @@ async function exportGif(){
   }
 }
 
-(async()=>{await openDB();await loadState();renderPresets();refreshAll();setTimeout(positionPresetFixedBtns,100)})();
+(async()=>{await openDB();await loadState();renderPresets();refreshAll()})();
 </script>
 </body>
 </html>
